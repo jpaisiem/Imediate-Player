@@ -1,0 +1,2630 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Media Player</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 18% 12%, #3c145f 0, transparent 34%), radial-gradient(circle at 88% 85%, #182a08 0, transparent 25%), linear-gradient(135deg, #050306, #12071b); color: #fbf8ff; }
+    .player { position: relative; width: min(920px, 100%); overflow: visible; border-radius: 20px; background: #150b20; box-shadow: 0 28px 70px #000000bb, 0 0 0 1px #6b258833; font-family: var(--player-font-family, Inter, ui-sans-serif, system-ui, sans-serif); font-size: var(--player-font-size, 15px); }
+    .player button, .player input, .player select, .player textarea { font-family: inherit; font-size: inherit; }
+    .player-header { padding: 20px 20px 8px; background: #150b20; }
+    .player-header h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 700; letter-spacing: 0; }
+    .player-layout { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+    .now-playing-widget { position: absolute; top: 100px; left: -200px; display: flex; flex-direction: column; justify-content: center; gap: 8px; width: 180px; min-width: 0; padding: 20px 16px; border-radius: 14px; background: #261034; }
+    .now-playing-widget strong { color: #b8f529; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .now-playing-widget span { overflow: hidden; color: #fff; font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .player:fullscreen .player-header,
+    .player:fullscreen .tabs,
+    .player:fullscreen .now-playing-widget { display: none; }
+    .tabs { display: flex; gap: 4px; padding: 12px 16px 0; background: #150b20; }
+    .tabs { flex-wrap: wrap; }
+    .tab { gap: 8px; }
+    .integration-tabs { display: flex; gap: 4px; margin-bottom: 18px; }
+    .integration-tabs .tab { border-radius: 10px; }
+    .tab { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 104px; width: auto; height: 36px; padding: 0 10px 0 15px; border-radius: 10px 10px 0 0; background: transparent; color: #d7bfdf; font-size: 14px; text-align: left; }
+    .tab:hover { background: #351544; }
+    .tab[aria-selected="true"] { background: #261034; color: #b8f529; }
+    .tab-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 20px; height: 20px; margin-left: auto; border-radius: 50%; background: transparent; color: #fff; cursor: pointer; font-size: 16px; line-height: 1; }
+    .tab-close:hover { background: #c72f68; color: #fff; transform: none; }
+    .tab-close.is-closing { background: #35a853; color: #fff; }
+    .panel[hidden] { display: none; }
+    .media-wrap { position: relative; aspect-ratio: 16 / 9; background: #050306; }
+    video { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .now-playing-art { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle, #71318b, #150b20 62%, #050306); }
+    .now-playing-art[hidden] { display: none; }
+    .now-playing-art img { width: 100%; height: 100%; object-fit: contain; }
+    .now-playing-art .music-mark { color: #b8f529; transform: scale(3); }
+    .now-playing-art span { position: absolute; right: 16px; bottom: 14px; left: 16px; overflow: hidden; color: #fff; font-size: 15px; font-weight: 650; text-align: center; text-overflow: ellipsis; text-shadow: 0 2px 8px #000; white-space: nowrap; }
+    .quick-controls { position: absolute; top: 50%; left: 50%; display: flex; flex-direction: column; gap: 10px; min-width: min(500px, calc(100vw - 44px)); padding: 12px; border-radius: 16px; background: #08040dcc; backdrop-filter: blur(10px); opacity: 1; transform: translate(-50%, -50%); transition: opacity .2s ease; }
+    .quick-controls[hidden] { display: none; }
+    .quick-controls button { background: #49205d; }
+    .quick-controls .quick-play { background: #b8f529; color: #111807; }
+    .quick-timeline { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; color: #f5eaff; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .quick-buttons { display: flex; justify-content: center; gap: 10px; }
+    .controls { padding: 16px 20px 20px; background: linear-gradient(#261034, #0c0710); }
+    .timeline { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; font-size: 13px; font-variant-numeric: tabular-nums; color: #d7bfdf; }
+    input[type="range"] { width: 100%; accent-color: #b8f529; cursor: pointer; }
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+    .upload { display: inline-flex; align-items: center; gap: 8px; padding: 0 13px; height: 42px; border-radius: 21px; background: #49205d; color: inherit; cursor: pointer; font-size: 14px; }
+    .upload:hover { background: #65307c; }
+    .upload input { display: none; }
+    button { display: inline-grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: #49205d; color: inherit; cursor: pointer; transition: transform .15s, background .15s; }
+    button:hover { background: #65307c; transform: translateY(-1px); }
+    .play { width: 50px; height: 50px; background: #b8f529; color: #111807; }
+    .play:hover { background: #ccff58; }
+    .volume { display: flex; align-items: center; gap: 8px; width: 160px; }
+    .volume input { min-width: 64px; }
+    .spacer { flex: 1; }
+    svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .play svg { fill: currentColor; stroke: currentColor; }
+    .library { padding: 28px 20px; min-height: 420px; background: linear-gradient(#261034, #0c0710); }
+    .library-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 22px; }
+    .library-heading h1 { margin: 0; font-size: 21px; font-weight: 650; }
+    .library-heading p { margin: 5px 0 0; color: #d7bfdf; font-size: 14px; }
+    .library-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .library-button { width: auto; height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; }
+    .save-button { background: #b8f529; color: #111807; }
+    .save-button:hover { background: #ccff58; }
+    .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+    .media-card { overflow: hidden; border-radius: 12px; background: #351544; cursor: pointer; }
+    .media-card:hover { outline: 2px solid #b8f529; }
+    .media-card video { aspect-ratio: 16/9; background: #050306; pointer-events: none; }
+    .media-card .audio-art { display: grid; place-items: center; aspect-ratio: 16/9; background: radial-gradient(circle, #71318b, #150b20); color: #b8f529; }
+    .media-card .album-art { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #050306; }
+    .media-card p { margin: 10px 12px 12px; overflow: hidden; color: #fff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    .empty-library { display: grid; place-items: center; min-height: 260px; border: 1px dashed #7b4290; border-radius: 14px; color: #d7bfdf; text-align: center; }
+    .empty-library strong { display: block; margin-bottom: 6px; color: #fff; }
+    .search-box { width: 100%; margin: 4px 0 22px; padding: 13px 16px; border: 1px solid #7b4290; border-radius: 11px; outline: none; background: #150b20; color: #fff; font: inherit; }
+    .search-box:focus { border-color: #b8f529; box-shadow: 0 0 0 3px #b8f52922; }
+    .search-filters { display: grid; grid-template-columns: 150px 1fr 1fr; gap: 10px; margin: 4px 0 22px; }
+    .search-filters .search-box { margin: 0; }
+    .search-select { padding: 13px 12px; border: 1px solid #7b4290; border-radius: 11px; outline: none; background: #150b20; color: #fff; font: inherit; }
+    .search-select:focus { border-color: #b8f529; box-shadow: 0 0 0 3px #b8f52922; }
+    .spotify-card { display: flex; align-items: center; gap: 18px; max-width: 680px; padding: 22px; border-radius: 16px; background: linear-gradient(135deg, #351544, #150b20); }
+    .spotify-mark { display: grid; flex: 0 0 auto; place-items: center; width: 76px; height: 76px; border-radius: 50%; background: #b8f529; color: #111807; }
+    .spotify-mark svg { width: 42px; height: 42px; stroke-width: 2.5; }
+    .spotify-copy { min-width: 0; flex: 1; }
+    .spotify-copy h2 { margin: 0 0 5px; font-size: 19px; }
+    .spotify-copy p { margin: 0; color: #d7bfdf; font-size: 14px; }
+    .spotify-open { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; margin-top: 14px; padding: 0 15px; border-radius: 20px; background: #b8f529; color: #111807; font-size: 14px; font-weight: 650; text-decoration: none; }
+    .spotify-open:hover { background: #ccff58; }
+    .spotify-embed { display: block; width: min(100%, 680px); height: 352px; margin-top: 16px; border: 0; border-radius: 16px; }
+    .playlist-import { display: flex; gap: 10px; max-width: 680px; margin-bottom: 14px; }
+    .playlist-import .search-box { margin: 0; }
+    .playlist-import .library-button { flex: 0 0 auto; }
+    .import-message { min-height: 20px; margin: 0 0 12px; color: #d7bfdf; font-size: 13px; }
+    .youtube-controls { display: flex; gap: 10px; max-width: 680px; }
+    .youtube-controls .search-box { margin: 0; }
+    .youtube-search { display: flex; gap: 10px; max-width: 680px; margin: 18px 0 10px; }
+    .youtube-search .search-box { margin: 0; }
+    .spotify-search { display: flex; gap: 10px; max-width: 680px; margin: 18px 0 10px; }
+    .spotify-search .search-box { margin: 0; }
+    .youtube-embed { display: block; width: min(100%, 760px); aspect-ratio: 16 / 9; margin-top: 18px; border: 0; border-radius: 16px; background: #050306; }
+    .youtube-watch-embed { display: block; width: min(100%, 860px); aspect-ratio: 16 / 9; margin-top: 18px; border: 0; border-radius: 16px; background: #050306; }
+    .external-page-embed { display: block; width: 100%; height: min(78vh, 820px); margin-top: 18px; border: 0; border-radius: 16px; background: #fff; }
+    .external-page-link { display: inline-block; margin-top: 12px; color: #b8f529; font-size: 14px; }
+    .settings-list { display: grid; gap: 10px; max-width: 520px; }
+    .settings-group { display: grid; gap: 10px; max-width: 520px; margin-bottom: 20px; }
+    .settings-group h2 { margin: 0; font-size: 16px; font-weight: 650; }
+    .settings-group h2 a { color: inherit; text-decoration: none; }
+    .settings-group h2 a:hover { text-decoration: underline; }
+    .settings-group p { margin: 0; color: #d7bfdf; font-size: 13px; }
+    .font-size-select { width: min(100%, 240px); margin: 0; }
+    .settings-filter-row { display: flex; gap: 10px; max-width: 520px; margin-bottom: 20px; }
+    .settings-filter { margin: 0; }
+    .settings-filter-row .library-button { flex: 0 0 auto; }
+    .cast-card { max-width: 620px; padding: 22px; border-radius: 16px; background: linear-gradient(135deg, #351544, #150b20); }
+    .cast-card h2 { margin: 0 0 6px; font-size: 19px; }
+    .cast-card p { margin: 0 0 16px; color: #d7bfdf; font-size: 14px; }
+    .settings-option { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 11px; background: #351544; color: #fff; cursor: pointer; }
+    .settings-option input { width: 18px; height: 18px; accent-color: #b8f529; }
+    body[data-alternate-colors="true"] { background: radial-gradient(circle at 18% 12%, #8f245f 0, transparent 34%), radial-gradient(circle at 88% 85%, #123f73 0, transparent 25%), linear-gradient(135deg, #09030a, #160b2d); }
+    body[data-alternate-colors="true"] .player,
+    body[data-alternate-colors="true"] .tabs,
+    body[data-alternate-colors="true"] .player-header { background: #160b2d; }
+    body[data-alternate-colors="true"] .tab:hover { background: #293c7a; }
+    body[data-alternate-colors="true"] .tab[aria-selected="true"] { background: #39205f; color: #ff4b61; }
+    body[data-alternate-colors="true"] .controls,
+    body[data-alternate-colors="true"] .library { background: linear-gradient(#39205f, #0b1022); }
+    body[data-alternate-colors="true"] button,
+    body[data-alternate-colors="true"] .upload,
+    body[data-alternate-colors="true"] .media-card,
+    body[data-alternate-colors="true"] .settings-option { background: #234c86; }
+    body[data-alternate-colors="true"] button:hover,
+    body[data-alternate-colors="true"] .upload:hover { background: #3265a8; }
+    body[data-alternate-colors="true"] .play,
+    body[data-alternate-colors="true"] .save-button,
+    body[data-alternate-colors="true"] .quick-controls .quick-play,
+    body[data-alternate-colors="true"] .spotify-mark { background: #ff4b61; color: #240611; }
+    body[data-alternate-colors="true"] .play:hover,
+    body[data-alternate-colors="true"] .save-button:hover { background: #ff7181; }
+    body[data-alternate-colors="true"] input[type="range"],
+    body[data-alternate-colors="true"] .search-box:focus,
+    body[data-alternate-colors="true"] .search-select:focus { accent-color: #ff4b61; border-color: #ff4b61; }
+    body[data-alternate-colors="true"] input[type="checkbox"] { accent-color: #ff4b61; }
+    body[data-alternate-colors="true"] .search-box,
+    body[data-alternate-colors="true"] .search-select { border-color: #4777b5; background: #160b2d; }
+    body[data-alternate-colors="true"] .external-page-link { color: #ff4b61; }
+    body[data-alternate-colors="true"] .spotify-card,
+    body[data-alternate-colors="true"] .cast-card { background: linear-gradient(135deg, #39205f, #160b2d); }
+    body[data-alternate-colors="true"] .spotify-open,
+    body[data-alternate-colors="true"] .youtubePanel .youtube-embed { background: #ff4b61; border: 2px solid #ff4b61; color: #240611; }
+    body[data-alternate-colors="true"] .now-playing-widget { background: #39205f; }
+    body[data-alternate-colors="true"] .now-playing-widget strong { color: #ff4b61; }
+    body[data-alternate-colors="true"] .media-card .audio-art { background: radial-gradient(circle, #d94f80, #160b2d); color: #ff4b61; }
+    body[data-alternate-colors="true"] .now-playing-art { background: radial-gradient(circle, #d94f80, #160b2d); }
+    body[data-alternate-colors="true"] .now-playing-art .music-mark { color: #ff4b61; }
+    body[data-bubble-bee="true"] { background: radial-gradient(circle at 18% 12%, #8f6b00 0, transparent 34%), radial-gradient(circle at 88% 85%, #4b3900 0, transparent 25%), linear-gradient(135deg, #050505, #1a1505); }
+    body[data-bubble-bee="true"] .player,
+    body[data-bubble-bee="true"] .tabs,
+    body[data-bubble-bee="true"] .player-header { background: #0b0b0b; }
+    body[data-bubble-bee="true"] .tab:hover { background: #5f4900; }
+    body[data-bubble-bee="true"] .tab[aria-selected="true"] { background: #332700; color: #ffd400; }
+    body[data-bubble-bee="true"] .controls,
+    body[data-bubble-bee="true"] .library { background: linear-gradient(#3b2d00, #080808); }
+    body[data-bubble-bee="true"] button,
+    body[data-bubble-bee="true"] .upload,
+    body[data-bubble-bee="true"] .media-card,
+    body[data-bubble-bee="true"] .settings-option { background: #b8860b; color: #090909; }
+    body[data-bubble-bee="true"] button:hover,
+    body[data-bubble-bee="true"] .upload:hover { background: #d4a017; }
+    body[data-bubble-bee="true"] .play,
+    body[data-bubble-bee="true"] .save-button,
+    body[data-bubble-bee="true"] .quick-controls .quick-play,
+    body[data-bubble-bee="true"] .spotify-mark { background: #ffd400; color: #090909; }
+    body[data-bubble-bee="true"] .play:hover,
+    body[data-bubble-bee="true"] .save-button:hover { background: #ffe45c; }
+    body[data-bubble-bee="true"] input[type="range"],
+    body[data-bubble-bee="true"] .search-box:focus,
+    body[data-bubble-bee="true"] .search-select:focus { accent-color: #ffd400; border-color: #ffd400; }
+    body[data-bubble-bee="true"] input[type="checkbox"] { accent-color: #ffd400; }
+    body[data-bubble-bee="true"] .search-box,
+    body[data-bubble-bee="true"] .search-select { border-color: #b8860b; background: #0b0b0b; }
+    body[data-bubble-bee="true"] .external-page-link { color: #ffd400; }
+    body[data-bubble-bee="true"] .spotify-card,
+    body[data-bubble-bee="true"] .cast-card { background: linear-gradient(135deg, #5f4900, #0b0b0b); }
+    body[data-bubble-bee="true"] .spotify-open,
+    body[data-bubble-bee="true"] .youtubePanel .youtube-embed { background: #ffd400; border: 2px solid #ffd400; color: #090909; }
+    body[data-bubble-bee="true"] .now-playing-widget { background: #3b2d00; }
+    body[data-bubble-bee="true"] .now-playing-widget strong { color: #ffd400; }
+    body[data-bubble-bee="true"] .media-card .audio-art { background: radial-gradient(circle, #b8860b, #0b0b0b); color: #ffd400; }
+    body[data-bubble-bee="true"] .now-playing-art { background: radial-gradient(circle, #b8860b, #0b0b0b); }
+    body[data-bubble-bee="true"] .now-playing-art .music-mark { color: #ffd400; }
+    body[data-geckoboy="true"] { background: radial-gradient(circle at 18% 12%, #087f83 0, transparent 34%), radial-gradient(circle at 88% 85%, #2a6fa3 0, transparent 25%), linear-gradient(135deg, #031316, #08233a); }
+    body[data-geckoboy="true"] .player,
+    body[data-geckoboy="true"] .tabs,
+    body[data-geckoboy="true"] .player-header { background: #062b3d; }
+    body[data-geckoboy="true"] .tab:hover { background: #176b83; }
+    body[data-geckoboy="true"] .tab[aria-selected="true"] { background: #0b526d; color: #ff8a27; }
+    body[data-geckoboy="true"] .controls,
+    body[data-geckoboy="true"] .library { background: linear-gradient(#0b526d, #061923); }
+    body[data-geckoboy="true"] button,
+    body[data-geckoboy="true"] .upload,
+    body[data-geckoboy="true"] .media-card,
+    body[data-geckoboy="true"] .settings-option { background: #1597a5; color: #031316; }
+    body[data-geckoboy="true"] button:hover,
+    body[data-geckoboy="true"] .upload:hover { background: #35b7c3; }
+    body[data-geckoboy="true"] .play,
+    body[data-geckoboy="true"] .save-button,
+    body[data-geckoboy="true"] .quick-controls .quick-play,
+    body[data-geckoboy="true"] .spotify-mark { background: #ff8a27; color: #241004; }
+    body[data-geckoboy="true"] .play:hover,
+    body[data-geckoboy="true"] .save-button:hover { background: #ffab5c; }
+    body[data-geckoboy="true"] input[type="range"],
+    body[data-geckoboy="true"] .search-box:focus,
+    body[data-geckoboy="true"] .search-select:focus { accent-color: #ff8a27; border-color: #ff8a27; }
+    body[data-geckoboy="true"] input[type="checkbox"] { accent-color: #ff8a27; }
+    body[data-geckoboy="true"] .search-box,
+    body[data-geckoboy="true"] .search-select { border-color: #1597a5; background: #062b3d; }
+    body[data-geckoboy="true"] .external-page-link { color: #ff8a27; }
+    body[data-geckoboy="true"] .spotify-card,
+    body[data-geckoboy="true"] .cast-card { background: linear-gradient(135deg, #0b526d, #062b3d); }
+    body[data-geckoboy="true"] .spotify-open,
+    body[data-geckoboy="true"] .youtubePanel .youtube-embed { background: #ff8a27; border: 2px solid #ff8a27; color: #241004; }
+    body[data-geckoboy="true"] .now-playing-widget { background: #0b526d; }
+    body[data-geckoboy="true"] .now-playing-widget strong { color: #ff8a27; }
+    body[data-geckoboy="true"] .media-card .audio-art { background: radial-gradient(circle, #1597a5, #062b3d); color: #ff8a27; }
+    body[data-geckoboy="true"] .now-playing-art { background: radial-gradient(circle, #1597a5, #062b3d); }
+    body[data-geckoboy="true"] .now-playing-art .music-mark { color: #ff8a27; }
+    body[data-ice-bear="true"] { background: radial-gradient(circle at 18% 12%, #dce7eb 0, transparent 34%), radial-gradient(circle at 88% 85%, #9edee0 0, transparent 25%), linear-gradient(135deg, #e9eef0, #bfcbd0); color: #111; }
+    body[data-ice-bear="true"] .player,
+    body[data-ice-bear="true"] .tabs,
+    body[data-ice-bear="true"] .player-header { background: #f6f8f9; }
+    body[data-ice-bear="true"] .player-header h1 { color: #111; }
+    body[data-ice-bear="true"] .tab { color: #263238; }
+    body[data-ice-bear="true"] .tab:hover { background: #c8d4d8; }
+    body[data-ice-bear="true"] .tab[aria-selected="true"] { background: #a9bcc2; color: #050505; }
+    body[data-ice-bear="true"] .controls,
+    body[data-ice-bear="true"] .library { background: linear-gradient(#dce5e8, #f6f8f9); }
+    body[data-ice-bear="true"] button,
+    body[data-ice-bear="true"] .upload,
+    body[data-ice-bear="true"] .media-card,
+    body[data-ice-bear="true"] .settings-option { background: #111; color: #fff; }
+    body[data-ice-bear="true"] button:hover,
+    body[data-ice-bear="true"] .upload:hover { background: #33454c; }
+    body[data-ice-bear="true"] .play,
+    body[data-ice-bear="true"] .save-button,
+    body[data-ice-bear="true"] .quick-controls .quick-play,
+    body[data-ice-bear="true"] .spotify-mark { background: #37d6d0; color: #050505; }
+    body[data-ice-bear="true"] .play:hover,
+    body[data-ice-bear="true"] .save-button:hover { background: #79e8e2; }
+    body[data-ice-bear="true"] input[type="range"],
+    body[data-ice-bear="true"] .search-box:focus,
+    body[data-ice-bear="true"] .search-select:focus { accent-color: #37d6d0; border-color: #37d6d0; }
+    body[data-ice-bear="true"] input[type="checkbox"] { accent-color: #37d6d0; }
+    body[data-ice-bear="true"] .search-box,
+    body[data-ice-bear="true"] .search-select { border-color: #8fa4aa; background: #fff; color: #111; }
+    body[data-ice-bear="true"] .library-heading p,
+    body[data-ice-bear="true"] .import-message,
+    body[data-ice-bear="true"] .spotify-copy p { color: #40545b; }
+    body[data-ice-bear="true"] .external-page-link { color: #008f91; }
+    body[data-ice-bear="true"] .spotify-card,
+    body[data-ice-bear="true"] .cast-card { background: linear-gradient(135deg, #fff, #dce5e8); color: #111; }
+    body[data-ice-bear="true"] .spotify-open,
+    body[data-ice-bear="true"] .youtubePanel .youtube-embed { background: #37d6d0; border: 2px solid #008f91; color: #050505; }
+    body[data-ice-bear="true"] .spotify-card h2,
+    body[data-ice-bear="true"] .cast-card h2 { color: #111; }
+    body[data-ice-bear="true"] .now-playing-widget { background: #dce5e8; }
+    body[data-ice-bear="true"] .now-playing-widget strong,
+    body[data-ice-bear="true"] .now-playing-widget span { color: #111; }
+    body[data-ice-bear="true"] .media-card .audio-art { background: radial-gradient(circle, #fff, #c8d4d8); color: #008f91; }
+    body[data-ice-bear="true"] .now-playing-art { background: radial-gradient(circle, #fff, #c8d4d8); }
+    body[data-ice-bear="true"] .now-playing-art .music-mark { color: #008f91; }
+    body[data-mushroom="true"] { background: radial-gradient(circle at 18% 12%, #8b5a3c 0, transparent 34%), radial-gradient(circle at 88% 85%, #4b281b 0, transparent 25%), linear-gradient(135deg, #160b07, #321b12); }
+    body[data-mushroom="true"] .player,
+    body[data-mushroom="true"] .tabs,
+    body[data-mushroom="true"] .player-header { background: #2b160f; }
+    body[data-mushroom="true"] .tab:hover { background: #6b422e; }
+    body[data-mushroom="true"] .tab[aria-selected="true"] { background: #583522; color: #b08d57; }
+    body[data-mushroom="true"] .controls,
+    body[data-mushroom="true"] .library { background: linear-gradient(#583522, #1b0e09); }
+    body[data-mushroom="true"] button,
+    body[data-mushroom="true"] .upload,
+    body[data-mushroom="true"] .media-card,
+    body[data-mushroom="true"] .settings-option { background: #7b4f35; color: #fff4e8; }
+    body[data-mushroom="true"] button:hover,
+    body[data-mushroom="true"] .upload:hover { background: #966346; }
+    body[data-mushroom="true"] .play,
+    body[data-mushroom="true"] .save-button,
+    body[data-mushroom="true"] .quick-controls .quick-play,
+    body[data-mushroom="true"] .spotify-mark { background: #b08d57; color: #24130b; }
+    body[data-mushroom="true"] .play:hover,
+    body[data-mushroom="true"] .save-button:hover { background: #c4a975; }
+    body[data-mushroom="true"] input[type="range"],
+    body[data-mushroom="true"] .search-box:focus,
+    body[data-mushroom="true"] .search-select:focus { accent-color: #b08d57; border-color: #b08d57; }
+    body[data-mushroom="true"] input[type="checkbox"] { accent-color: #b08d57; }
+    body[data-mushroom="true"] .search-box,
+    body[data-mushroom="true"] .search-select { border-color: #966346; background: #2b160f; }
+    body[data-mushroom="true"] .external-page-link { color: #b08d57; }
+    body[data-mushroom="true"] .spotify-card,
+    body[data-mushroom="true"] .cast-card { background: linear-gradient(135deg, #583522, #2b160f); }
+    body[data-mushroom="true"] .spotify-open,
+    body[data-mushroom="true"] .youtubePanel .youtube-embed { background: #b08d57; border: 2px solid #b08d57; color: #24130b; }
+    body[data-mushroom="true"] .now-playing-widget { background: #583522; }
+    body[data-mushroom="true"] .now-playing-widget strong { color: #b08d57; }
+    body[data-mushroom="true"] .media-card .audio-art { background: radial-gradient(circle, #966346, #2b160f); color: #b08d57; }
+    body[data-mushroom="true"] .now-playing-art { background: radial-gradient(circle, #966346, #2b160f); }
+    body[data-mushroom="true"] .now-playing-art .music-mark { color: #b08d57; }
+    body[data-girly="true"] { background: radial-gradient(circle at 18% 12%, #f6b6c9 0, transparent 34%), radial-gradient(circle at 88% 85%, #d94f80 0, transparent 25%), linear-gradient(135deg, #fff0f5, #f2b7c9); color: #111; }
+    body[data-girly="true"] .player,
+    body[data-girly="true"] .tabs,
+    body[data-girly="true"] .player-header { background: #fff7fa; }
+    body[data-girly="true"] .player-header h1 { color: #111; }
+    body[data-girly="true"] .tab { color: #111; }
+    body[data-girly="true"] .tab:hover { background: #f5c4d4; }
+    body[data-girly="true"] .tab[aria-selected="true"] { background: #df6f99; color: #fff; }
+    body[data-girly="true"] .controls,
+    body[data-girly="true"] .library { background: linear-gradient(#f8cedb, #fff7fa); }
+    body[data-girly="true"] button,
+    body[data-girly="true"] .upload,
+    body[data-girly="true"] .media-card,
+    body[data-girly="true"] .settings-option { background: #111; color: #fff; }
+    body[data-girly="true"] button:hover,
+    body[data-girly="true"] .upload:hover { background: #333; }
+    body[data-girly="true"] .play,
+    body[data-girly="true"] .save-button,
+    body[data-girly="true"] .quick-controls .quick-play,
+    body[data-girly="true"] .spotify-mark { background: #c72f68; color: #fff; }
+    body[data-girly="true"] .play:hover,
+    body[data-girly="true"] .save-button:hover { background: #e25a8c; }
+    body[data-girly="true"] input[type="range"],
+    body[data-girly="true"] .search-box:focus,
+    body[data-girly="true"] .search-select:focus { accent-color: #c72f68; border-color: #c72f68; }
+    body[data-girly="true"] input[type="checkbox"] { accent-color: #c72f68; }
+    body[data-girly="true"] .search-box,
+    body[data-girly="true"] .search-select { border-color: #df6f99; background: #fff; color: #111; }
+    body[data-girly="true"] .library-heading p,
+    body[data-girly="true"] .import-message,
+    body[data-girly="true"] .spotify-copy p { color: #5b243b; }
+    body[data-girly="true"] .external-page-link { color: #a91f54; }
+    body[data-girly="true"] .spotify-card,
+    body[data-girly="true"] .cast-card { background: linear-gradient(135deg, #f8cedb, #fff7fa); color: #111; }
+    body[data-girly="true"] .spotify-open,
+    body[data-girly="true"] .youtubePanel .youtube-embed { background: #c72f68; border: 2px solid #a91f54; color: #fff; }
+    body[data-girly="true"] .spotify-card h2,
+    body[data-girly="true"] .cast-card h2 { color: #111; }
+    body[data-girly="true"] .now-playing-widget { background: #f8cedb; }
+    body[data-girly="true"] .now-playing-widget strong,
+    body[data-girly="true"] .now-playing-widget span { color: #111; }
+    body[data-girly="true"] .media-card .audio-art { background: radial-gradient(circle, #f6b6c9, #fff7fa); color: #a91f54; }
+    body[data-girly="true"] .now-playing-art { background: radial-gradient(circle, #f6b6c9, #fff7fa); }
+    body[data-girly="true"] .now-playing-art .music-mark { color: #a91f54; }
+    body[data-john-deer="true"] { background: radial-gradient(circle at 18% 12%, #3d7a3a 0, transparent 34%), radial-gradient(circle at 88% 85%, #8caf45 0, transparent 25%), linear-gradient(135deg, #071c0d, #183b1d); }
+    body[data-john-deer="true"] .player,
+    body[data-john-deer="true"] .tabs,
+    body[data-john-deer="true"] .player-header { background: #0b2a14; }
+    body[data-john-deer="true"] .tab:hover { background: #356b35; }
+    body[data-john-deer="true"] .tab[aria-selected="true"] { background: #245226; color: #f4d03f; }
+    body[data-john-deer="true"] .controls,
+    body[data-john-deer="true"] .library { background: linear-gradient(#245226, #08190d); }
+    body[data-john-deer="true"] button,
+    body[data-john-deer="true"] .upload,
+    body[data-john-deer="true"] .media-card,
+    body[data-john-deer="true"] .settings-option { background: #4d8242; color: #f5f8e8; }
+    body[data-john-deer="true"] button:hover,
+    body[data-john-deer="true"] .upload:hover { background: #6b9d50; }
+    body[data-john-deer="true"] .play,
+    body[data-john-deer="true"] .save-button,
+    body[data-john-deer="true"] .quick-controls .quick-play,
+    body[data-john-deer="true"] .spotify-mark { background: #f4d03f; color: #10200d; }
+    body[data-john-deer="true"] .play:hover,
+    body[data-john-deer="true"] .save-button:hover { background: #ffe477; }
+    body[data-john-deer="true"] input[type="range"],
+    body[data-john-deer="true"] input[type="checkbox"],
+    body[data-john-deer="true"] .search-box:focus,
+    body[data-john-deer="true"] .search-select:focus { accent-color: #f4d03f; border-color: #f4d03f; }
+    body[data-john-deer="true"] .search-box,
+    body[data-john-deer="true"] .search-select { border-color: #6b9d50; background: #0b2a14; }
+    body[data-john-deer="true"] .external-page-link { color: #f4d03f; }
+    body[data-john-deer="true"] .spotify-card,
+    body[data-john-deer="true"] .cast-card { background: linear-gradient(135deg, #245226, #0b2a14); }
+    body[data-john-deer="true"] .spotify-open,
+    body[data-john-deer="true"] .youtubePanel .youtube-embed { background: #f4d03f; border: 2px solid #f4d03f; color: #10200d; }
+    body[data-john-deer="true"] .now-playing-widget { background: #245226; }
+    body[data-john-deer="true"] .now-playing-widget strong { color: #f4d03f; }
+    body[data-john-deer="true"] .media-card .audio-art { background: radial-gradient(circle, #4d8242, #0b2a14); color: #f4d03f; }
+    body[data-john-deer="true"] .now-playing-art { background: radial-gradient(circle, #4d8242, #0b2a14); }
+    body[data-john-deer="true"] .now-playing-art .music-mark { color: #f4d03f; }
+    body[data-bangles="true"] { background: radial-gradient(circle at 18% 12%, #f08a24 0, transparent 34%), radial-gradient(circle at 88% 85%, #8a3d0b 0, transparent 25%), linear-gradient(135deg, #170b04, #3d1d08); }
+    body[data-bangles="true"] .player,
+    body[data-bangles="true"] .tabs,
+    body[data-bangles="true"] .player-header { background: #2b1205; }
+    body[data-bangles="true"] .tab:hover { background: #9a4b11; }
+    body[data-bangles="true"] .tab[aria-selected="true"] { background: #e87518; color: #fff; }
+    body[data-bangles="true"] .controls,
+    body[data-bangles="true"] .library { background: linear-gradient(#9a4b11, #1b0c04); }
+    body[data-bangles="true"] button,
+    body[data-bangles="true"] .upload,
+    body[data-bangles="true"] .media-card,
+    body[data-bangles="true"] .settings-option { background: #111; color: #fff; }
+    body[data-bangles="true"] button:hover,
+    body[data-bangles="true"] .upload:hover { background: #333; }
+    body[data-bangles="true"] .play,
+    body[data-bangles="true"] .save-button,
+    body[data-bangles="true"] .quick-controls .quick-play,
+    body[data-bangles="true"] .spotify-mark { background: #f08a24; color: #111; }
+    body[data-bangles="true"] .play:hover,
+    body[data-bangles="true"] .save-button:hover { background: #ffad5c; }
+    body[data-bangles="true"] input[type="range"],
+    body[data-bangles="true"] input[type="checkbox"],
+    body[data-bangles="true"] .search-box:focus,
+    body[data-bangles="true"] .search-select:focus { accent-color: #f08a24; border-color: #f08a24; }
+    body[data-bangles="true"] .search-box,
+    body[data-bangles="true"] .search-select { border-color: #e87518; background: #2b1205; color: #fff; }
+    body[data-bangles="true"] .external-page-link { color: #f08a24; }
+    body[data-bangles="true"] .spotify-card,
+    body[data-bangles="true"] .cast-card { background: linear-gradient(135deg, #9a4b11, #2b1205); }
+    body[data-bangles="true"] .spotify-open,
+    body[data-bangles="true"] .youtubePanel .youtube-embed { background: #f08a24; border: 2px solid #f08a24; color: #111; }
+    body[data-bangles="true"] .now-playing-widget { background: #9a4b11; }
+    body[data-bangles="true"] .now-playing-widget strong { color: #fff; }
+    body[data-bangles="true"] .media-card .audio-art { background: radial-gradient(circle, #e87518, #2b1205); color: #fff; }
+    body[data-bangles="true"] .now-playing-art { background: radial-gradient(circle, #e87518, #2b1205); }
+    body[data-bangles="true"] .now-playing-art .music-mark { color: #fff; }
+    @keyframes rgbShift { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+    body[data-rgb="true"] { background: linear-gradient(135deg, #ff1744, #651fff, #00e5ff, #00e676, #ffea00, #ff6d00); background-size: 400% 400%; animation: rgbShift 14s linear infinite; }
+    body[data-rgb="true"] .player,
+    body[data-rgb="true"] .tabs,
+    body[data-rgb="true"] .player-header { background: #111c; }
+    body[data-rgb="true"] .controls,
+    body[data-rgb="true"] .library { background: linear-gradient(135deg, #ff1744cc, #651fffcc, #00e5ffcc, #00e676cc, #ffea00cc, #ff6d00cc); background-size: 400% 400%; animation: rgbShift 14s linear infinite; }
+    body[data-rgb="true"] button,
+    body[data-rgb="true"] .upload,
+    body[data-rgb="true"] .media-card,
+    body[data-rgb="true"] .settings-option { background: #111; color: #fff; }
+    body[data-rgb="true"] .tab[aria-selected="true"],
+    body[data-rgb="true"] .play,
+    body[data-rgb="true"] .save-button,
+    body[data-rgb="true"] .quick-controls .quick-play,
+    body[data-rgb="true"] .spotify-mark { background: #fff; color: #111; }
+    body[data-rgb="true"] input[type="range"],
+    body[data-rgb="true"] input[type="checkbox"],
+    body[data-rgb="true"] .search-box:focus,
+    body[data-rgb="true"] .search-select:focus { accent-color: #00e5ff; border-color: #00e5ff; }
+    body[data-rgb="true"] .spotify-card,
+    body[data-rgb="true"] .cast-card { background: linear-gradient(135deg, #ff1744, #651fff, #00e5ff, #00e676, #ffea00, #ff6d00); background-size: 400% 400%; animation: rgbShift 14s linear infinite; }
+    body[data-rgb="true"] .spotify-open,
+    body[data-rgb="true"] .external-page-link { color: #fff; }
+    body[data-rgb="true"] .now-playing-widget,
+    body[data-rgb="true"] .media-card .audio-art,
+    body[data-rgb="true"] .now-playing-art { background: linear-gradient(135deg, #ff1744, #651fff, #00e5ff, #00e676, #ffea00, #ff6d00); background-size: 400% 400%; animation: rgbShift 14s linear infinite; }
+    body[data-terminal="true"] { background: radial-gradient(circle at 20% 10%, #063d1b 0, transparent 35%), linear-gradient(135deg, #010302, #06150b); color: #39ff88; }
+    body[data-terminal="true"] .player,
+    body[data-terminal="true"] .tabs,
+    body[data-terminal="true"] .player-header { background: #020604; }
+    body[data-terminal="true"] .player-header h1,
+    body[data-terminal="true"] .tab,
+    body[data-terminal="true"] .library-heading h1 { color: #39ff88; }
+    body[data-terminal="true"] .tab:hover { background: #064d25; }
+    body[data-terminal="true"] .tab[aria-selected="true"] { background: #0b6b35; color: #b6ffcf; }
+    body[data-terminal="true"] .controls,
+    body[data-terminal="true"] .library { background: linear-gradient(#063d1b, #010302); }
+    body[data-terminal="true"] button,
+    body[data-terminal="true"] .upload,
+    body[data-terminal="true"] .media-card,
+    body[data-terminal="true"] .settings-option { background: #052b16; color: #39ff88; border: 1px solid #168a45; }
+    body[data-terminal="true"] button:hover,
+    body[data-terminal="true"] .upload:hover { background: #0b6b35; }
+    body[data-terminal="true"] .play,
+    body[data-terminal="true"] .save-button,
+    body[data-terminal="true"] .quick-controls .quick-play,
+    body[data-terminal="true"] .spotify-mark { background: #39ff88; color: #010302; }
+    body[data-terminal="true"] input[type="range"],
+    body[data-terminal="true"] input[type="checkbox"],
+    body[data-terminal="true"] .search-box:focus,
+    body[data-terminal="true"] .search-select:focus { accent-color: #39ff88; border-color: #39ff88; }
+    body[data-terminal="true"] .search-box,
+    body[data-terminal="true"] .search-select { border-color: #168a45; background: #020604; color: #39ff88; }
+    body[data-terminal="true"] .spotify-card,
+    body[data-terminal="true"] .cast-card,
+    body[data-terminal="true"] .now-playing-widget { background: #052b16; border: 1px solid #168a45; }
+    body[data-terminal="true"] .spotify-open,
+    body[data-terminal="true"] .external-page-link { color: #b6ffcf; }
+    body[data-terminal="true"] .media-card .audio-art,
+    body[data-terminal="true"] .now-playing-art { background: radial-gradient(circle, #0b6b35, #010302); color: #39ff88; }
+    body[data-windows-xp="true"] { background: linear-gradient(135deg, #3a6ea5, #b4d7f1, #6d9fd0); color: #172033; }
+    body[data-windows-xp="true"] .player { background: #d9e7f5; border: 2px solid #164a91; box-shadow: 0 20px 50px #164a9166; }
+    body[data-windows-xp="true"] .tabs,
+    body[data-windows-xp="true"] .player-header { background: linear-gradient(#2867b2, #15488b); }
+    body[data-windows-xp="true"] .player-header h1,
+    body[data-windows-xp="true"] .tab { color: #fff; }
+    body[data-windows-xp="true"] .tab:hover { background: #4b91d1; }
+    body[data-windows-xp="true"] .tab[aria-selected="true"] { background: #b9d8f2; color: #123c78; }
+    body[data-windows-xp="true"] .controls,
+    body[data-windows-xp="true"] .library { background: linear-gradient(#d7e8f7, #b6cce0); }
+    body[data-windows-xp="true"] button,
+    body[data-windows-xp="true"] .upload,
+    body[data-windows-xp="true"] .media-card,
+    body[data-windows-xp="true"] .settings-option { background: #e9f2fa; border: 1px solid #7199bd; color: #123c78; }
+    body[data-windows-xp="true"] button:hover,
+    body[data-windows-xp="true"] .upload:hover { background: #c3def4; }
+    body[data-windows-xp="true"] .play,
+    body[data-windows-xp="true"] .save-button,
+    body[data-windows-xp="true"] .quick-controls .quick-play,
+    body[data-windows-xp="true"] .spotify-mark { background: #2c78c7; color: #fff; }
+    body[data-windows-xp="true"] .play:hover,
+    body[data-windows-xp="true"] .save-button:hover { background: #4c98df; }
+    body[data-windows-xp="true"] input[type="range"],
+    body[data-windows-xp="true"] input[type="checkbox"],
+    body[data-windows-xp="true"] .search-box:focus,
+    body[data-windows-xp="true"] .search-select:focus { accent-color: #2c78c7; border-color: #2c78c7; }
+    body[data-windows-xp="true"] .search-box,
+    body[data-windows-xp="true"] .search-select { border-color: #7199bd; background: #fff; color: #172033; }
+    body[data-windows-xp="true"] .spotify-card,
+    body[data-windows-xp="true"] .cast-card,
+    body[data-windows-xp="true"] .now-playing-widget { background: linear-gradient(135deg, #b9d8f2, #e9f2fa); border: 1px solid #7199bd; color: #123c78; }
+    body[data-windows-xp="true"] .now-playing-widget strong { color: #164a91; }
+    body[data-windows-xp="true"] .spotify-open,
+    body[data-windows-xp="true"] .external-page-link { color: #164a91; }
+    body[data-windows-xp="true"] .media-card .audio-art,
+    body[data-windows-xp="true"] .now-playing-art { background: radial-gradient(circle, #71a9d8, #d9e7f5); color: #164a91; }
+    body[data-retro-mac="true"] { background: repeating-linear-gradient(0deg, #b8b8b8 0, #b8b8b8 2px, #cfcfcf 2px, #cfcfcf 4px); color: #111; }
+    body[data-retro-mac="true"] .player { background: #d7d7d7; border: 2px solid #222; box-shadow: 8px 8px 0 #555; }
+    body[data-retro-mac="true"] .tabs,
+    body[data-retro-mac="true"] .player-header { background: #d7d7d7; border-bottom: 2px solid #222; }
+    body[data-retro-mac="true"] .player-header h1,
+    body[data-retro-mac="true"] .tab { color: #111; }
+    body[data-retro-mac="true"] .tab:hover { background: #b9c7d8; }
+    body[data-retro-mac="true"] .tab[aria-selected="true"] { background: #7890aa; color: #fff; }
+    body[data-retro-mac="true"] .controls,
+    body[data-retro-mac="true"] .library { background: #d7d7d7; }
+    body[data-retro-mac="true"] button,
+    body[data-retro-mac="true"] .upload,
+    body[data-retro-mac="true"] .media-card,
+    body[data-retro-mac="true"] .settings-option { background: #eeeeee; border: 2px solid #333; color: #111; box-shadow: 2px 2px 0 #777; }
+    body[data-retro-mac="true"] button:hover,
+    body[data-retro-mac="true"] .upload:hover { background: #c6d5e5; }
+    body[data-retro-mac="true"] .play,
+    body[data-retro-mac="true"] .save-button,
+    body[data-retro-mac="true"] .quick-controls .quick-play,
+    body[data-retro-mac="true"] .spotify-mark { background: #7890aa; color: #fff; }
+    body[data-retro-mac="true"] .play:hover,
+    body[data-retro-mac="true"] .save-button:hover { background: #93aac2; }
+    body[data-retro-mac="true"] input[type="range"],
+    body[data-retro-mac="true"] input[type="checkbox"],
+    body[data-retro-mac="true"] .search-box:focus,
+    body[data-retro-mac="true"] .search-select:focus { accent-color: #536b85; border-color: #536b85; }
+    body[data-retro-mac="true"] .search-box,
+    body[data-retro-mac="true"] .search-select { border: 2px solid #333; background: #fff; color: #111; }
+    body[data-retro-mac="true"] .spotify-card,
+    body[data-retro-mac="true"] .cast-card,
+    body[data-retro-mac="true"] .now-playing-widget { background: #c5c5c5; border: 2px solid #333; color: #111; }
+    body[data-retro-mac="true"] .now-playing-widget strong,
+    body[data-retro-mac="true"] .spotify-open,
+    body[data-retro-mac="true"] .external-page-link { color: #536b85; }
+    body[data-retro-mac="true"] .media-card .audio-art,
+    body[data-retro-mac="true"] .now-playing-art { background: radial-gradient(circle, #b9c7d8, #d7d7d7); color: #536b85; }
+    body[data-gameboy="true"] { background: linear-gradient(135deg, #8bac0f, #c4d49b, #6f8f0b); color: #0f380f; }
+    body[data-gameboy="true"] .player { background: #9bbc0f; border: 4px solid #306230; box-shadow: 8px 8px 0 #0f380f; }
+    body[data-gameboy="true"] .tabs,
+    body[data-gameboy="true"] .player-header { background: #306230; }
+    body[data-gameboy="true"] .player-header h1,
+    body[data-gameboy="true"] .tab { color: #9bbc0f; }
+    body[data-gameboy="true"] .tab:hover { background: #4f772f; }
+    body[data-gameboy="true"] .tab[aria-selected="true"] { background: #8bac0f; color: #0f380f; }
+    body[data-gameboy="true"] .controls,
+    body[data-gameboy="true"] .library { background: #9bbc0f; }
+    body[data-gameboy="true"] button,
+    body[data-gameboy="true"] .upload,
+    body[data-gameboy="true"] .media-card,
+    body[data-gameboy="true"] .settings-option { background: #c4d49b; border: 2px solid #306230; color: #0f380f; }
+    body[data-gameboy="true"] button:hover,
+    body[data-gameboy="true"] .upload:hover { background: #d8e5b8; }
+    body[data-gameboy="true"] .play,
+    body[data-gameboy="true"] .save-button,
+    body[data-gameboy="true"] .quick-controls .quick-play,
+    body[data-gameboy="true"] .spotify-mark { background: #0f380f; color: #9bbc0f; }
+    body[data-gameboy="true"] .play:hover,
+    body[data-gameboy="true"] .save-button:hover { background: #306230; }
+    body[data-gameboy="true"] input[type="range"],
+    body[data-gameboy="true"] input[type="checkbox"],
+    body[data-gameboy="true"] .search-box:focus,
+    body[data-gameboy="true"] .search-select:focus { accent-color: #306230; border-color: #306230; }
+    body[data-gameboy="true"] .search-box,
+    body[data-gameboy="true"] .search-select { border: 2px solid #306230; background: #c4d49b; color: #0f380f; }
+    body[data-gameboy="true"] .spotify-card,
+    body[data-gameboy="true"] .cast-card,
+    body[data-gameboy="true"] .now-playing-widget { background: #c4d49b; border: 2px solid #306230; color: #0f380f; }
+    body[data-gameboy="true"] .now-playing-widget strong,
+    body[data-gameboy="true"] .spotify-open,
+    body[data-gameboy="true"] .external-page-link { color: #306230; }
+    body[data-gameboy="true"] .media-card .audio-art,
+    body[data-gameboy="true"] .now-playing-art { background: radial-gradient(circle, #8bac0f, #306230); color: #c4d49b; }
+    body[data-snes="true"] { background: linear-gradient(135deg, #514f80, #b7b5c8, #6d6b9b); color: #25243d; }
+    body[data-snes="true"] .player { background: #b7b5c8; border: 3px solid #302e55; box-shadow: 8px 8px 0 #302e55; }
+    body[data-snes="true"] .tabs,
+    body[data-snes="true"] .player-header { background: #514f80; }
+    body[data-snes="true"] .player-header h1,
+    body[data-snes="true"] .tab { color: #fff; }
+    body[data-snes="true"] .tab:hover { background: #716fa2; }
+    body[data-snes="true"] .tab[aria-selected="true"] { background: #b7b5c8; color: #302e55; }
+    body[data-snes="true"] .controls,
+    body[data-snes="true"] .library { background: linear-gradient(#b7b5c8, #8987ac); }
+    body[data-snes="true"] button,
+    body[data-snes="true"] .upload,
+    body[data-snes="true"] .media-card,
+    body[data-snes="true"] .settings-option { background: #deddea; border: 2px solid #514f80; color: #302e55; }
+    body[data-snes="true"] button:hover,
+    body[data-snes="true"] .upload:hover { background: #fff; }
+    body[data-snes="true"] .play,
+    body[data-snes="true"] .save-button,
+    body[data-snes="true"] .quick-controls .quick-play,
+    body[data-snes="true"] .spotify-mark { background: #d83b55; color: #fff; }
+    body[data-snes="true"] .play:hover,
+    body[data-snes="true"] .save-button:hover { background: #ef6077; }
+    body[data-snes="true"] input[type="range"],
+    body[data-snes="true"] input[type="checkbox"],
+    body[data-snes="true"] .search-box:focus,
+    body[data-snes="true"] .search-select:focus { accent-color: #d83b55; border-color: #d83b55; }
+    body[data-snes="true"] .search-box,
+    body[data-snes="true"] .search-select { border: 2px solid #514f80; background: #fff; color: #25243d; }
+    body[data-snes="true"] .spotify-card,
+    body[data-snes="true"] .cast-card,
+    body[data-snes="true"] .now-playing-widget { background: #8987ac; border: 2px solid #514f80; color: #25243d; }
+    body[data-snes="true"] .now-playing-widget strong,
+    body[data-snes="true"] .spotify-open,
+    body[data-snes="true"] .external-page-link { color: #302e55; }
+    body[data-snes="true"] .media-card .audio-art,
+    body[data-snes="true"] .now-playing-art { background: radial-gradient(circle, #716fa2, #514f80); color: #fff; }
+    .spaceballs-easter-egg { display: none; }
+    body[data-spaceballs="true"] { background: radial-gradient(circle at 70% 20%, #293b78 0, transparent 18%), radial-gradient(circle at 20% 80%, #44206b 0, transparent 20%), #03050f; color: #e8eeff; }
+    body[data-spaceballs="true"]::before { position: fixed; z-index: -1; inset: 0; background-image: radial-gradient(circle, #fff 0 1px, transparent 1px), radial-gradient(circle, #78b8ff 0 1px, transparent 1px); background-position: 0 0, 35px 45px; background-size: 70px 90px, 110px 130px; content: ''; opacity: .45; }
+    body[data-spaceballs="true"] .player,
+    body[data-spaceballs="true"] .tabs,
+    body[data-spaceballs="true"] .player-header { background: #090d22eF; }
+    body[data-spaceballs="true"] .player-header h1,
+    body[data-spaceballs="true"] .tab { color: #e8eeff; }
+    body[data-spaceballs="true"] .tab:hover { background: #293b78; }
+    body[data-spaceballs="true"] .tab[aria-selected="true"] { background: #526fc4; color: #fff; }
+    body[data-spaceballs="true"] .controls,
+    body[data-spaceballs="true"] .library { background: linear-gradient(#182553ee, #060914ee); }
+    body[data-spaceballs="true"] button,
+    body[data-spaceballs="true"] .upload,
+    body[data-spaceballs="true"] .media-card,
+    body[data-spaceballs="true"] .settings-option { background: #17234d; color: #e8eeff; border-color: #526fc4; }
+    body[data-spaceballs="true"] button:hover,
+    body[data-spaceballs="true"] .upload:hover { background: #293b78; }
+    body[data-spaceballs="true"] .play,
+    body[data-spaceballs="true"] .save-button,
+    body[data-spaceballs="true"] .quick-controls .quick-play,
+    body[data-spaceballs="true"] .spotify-mark { background: #ff4f9a; color: #fff; }
+    body[data-spaceballs="true"] .play:hover,
+    body[data-spaceballs="true"] .save-button:hover { background: #ff83b8; }
+    body[data-spaceballs="true"] input[type="range"],
+    body[data-spaceballs="true"] input[type="checkbox"],
+    body[data-spaceballs="true"] .search-box:focus,
+    body[data-spaceballs="true"] .search-select:focus { accent-color: #ff4f9a; border-color: #ff4f9a; }
+    body[data-spaceballs="true"] .search-box,
+    body[data-spaceballs="true"] .search-select { border-color: #526fc4; background: #090d22; color: #e8eeff; }
+    body[data-spaceballs="true"] .spotify-card,
+    body[data-spaceballs="true"] .cast-card,
+    body[data-spaceballs="true"] .now-playing-widget { background: linear-gradient(135deg, #293b78, #090d22); border-color: #526fc4; }
+    body[data-spaceballs="true"] .now-playing-widget strong,
+    body[data-spaceballs="true"] .spotify-open,
+    body[data-spaceballs="true"] .external-page-link { color: #ff83b8; }
+    body[data-spaceballs="true"] .media-card .audio-art,
+    body[data-spaceballs="true"] .now-playing-art { background: radial-gradient(circle, #526fc4, #090d22); color: #ff83b8; }
+    body[data-ps2="true"] { background: radial-gradient(circle at 70% 15%, #184d87 0, transparent 28%), linear-gradient(135deg, #020308, #071b36, #010205); color: #d9ecff; }
+    body[data-ps2="true"] .player,
+    body[data-ps2="true"] .tabs,
+    body[data-ps2="true"] .player-header { background: #030711; }
+    body[data-ps2="true"] .player { border: 2px solid #1e6bb5; box-shadow: 0 20px 55px #00152eaa; }
+    body[data-ps2="true"] .player-header h1,
+    body[data-ps2="true"] .tab { color: #d9ecff; }
+    body[data-ps2="true"] .tab:hover { background: #123c6b; }
+    body[data-ps2="true"] .tab[aria-selected="true"] { background: #1e6bb5; color: #fff; }
+    body[data-ps2="true"] .controls,
+    body[data-ps2="true"] .library { background: linear-gradient(#0b315b, #02050b); }
+    body[data-ps2="true"] button,
+    body[data-ps2="true"] .upload,
+    body[data-ps2="true"] .media-card,
+    body[data-ps2="true"] .settings-option { background: #09213f; border: 1px solid #1e6bb5; color: #d9ecff; }
+    body[data-ps2="true"] button:hover,
+    body[data-ps2="true"] .upload:hover { background: #123c6b; }
+    body[data-ps2="true"] .play,
+    body[data-ps2="true"] .save-button,
+    body[data-ps2="true"] .quick-controls .quick-play,
+    body[data-ps2="true"] .spotify-mark { background: #3aa6ff; color: #020308; }
+    body[data-ps2="true"] .play:hover,
+    body[data-ps2="true"] .save-button:hover { background: #78c4ff; }
+    body[data-ps2="true"] input[type="range"],
+    body[data-ps2="true"] input[type="checkbox"],
+    body[data-ps2="true"] .search-box:focus,
+    body[data-ps2="true"] .search-select:focus { accent-color: #3aa6ff; border-color: #3aa6ff; }
+    body[data-ps2="true"] .search-box,
+    body[data-ps2="true"] .search-select { border-color: #1e6bb5; background: #030711; color: #d9ecff; }
+    body[data-ps2="true"] .spotify-card,
+    body[data-ps2="true"] .cast-card,
+    body[data-ps2="true"] .now-playing-widget { background: linear-gradient(135deg, #123c6b, #030711); border-color: #1e6bb5; }
+    body[data-ps2="true"] .now-playing-widget strong,
+    body[data-ps2="true"] .spotify-open,
+    body[data-ps2="true"] .external-page-link { color: #78c4ff; }
+    body[data-ps2="true"] .media-card .audio-art,
+    body[data-ps2="true"] .now-playing-art { background: radial-gradient(circle, #1e6bb5, #030711); color: #78c4ff; }
+    body[data-xbox="true"] { background: radial-gradient(circle at 75% 15%, #107c10 0, transparent 28%), linear-gradient(135deg, #050505, #142014, #020402); color: #e8f5e8; }
+    body[data-xbox="true"] .player,
+    body[data-xbox="true"] .tabs,
+    body[data-xbox="true"] .player-header { background: #0b0f0b; }
+    body[data-xbox="true"] .player { border: 2px solid #107c10; box-shadow: 0 20px 55px #062d06aa; }
+    body[data-xbox="true"] .player-header h1,
+    body[data-xbox="true"] .tab { color: #e8f5e8; }
+    body[data-xbox="true"] .tab:hover { background: #185c18; }
+    body[data-xbox="true"] .tab[aria-selected="true"] { background: #107c10; color: #fff; }
+    body[data-xbox="true"] .controls,
+    body[data-xbox="true"] .library { background: linear-gradient(#164516, #050805); }
+    body[data-xbox="true"] button,
+    body[data-xbox="true"] .upload,
+    body[data-xbox="true"] .media-card,
+    body[data-xbox="true"] .settings-option { background: #152415; border: 1px solid #2ca52c; color: #e8f5e8; }
+    body[data-xbox="true"] button:hover,
+    body[data-xbox="true"] .upload:hover { background: #185c18; }
+    body[data-xbox="true"] .play,
+    body[data-xbox="true"] .save-button,
+    body[data-xbox="true"] .quick-controls .quick-play,
+    body[data-xbox="true"] .spotify-mark { background: #8bf000; color: #061006; }
+    body[data-xbox="true"] .play:hover,
+    body[data-xbox="true"] .save-button:hover { background: #b1ff4f; }
+    body[data-xbox="true"] input[type="range"],
+    body[data-xbox="true"] input[type="checkbox"],
+    body[data-xbox="true"] .search-box:focus,
+    body[data-xbox="true"] .search-select:focus { accent-color: #8bf000; border-color: #8bf000; }
+    body[data-xbox="true"] .search-box,
+    body[data-xbox="true"] .search-select { border-color: #2ca52c; background: #0b0f0b; color: #e8f5e8; }
+    body[data-xbox="true"] .spotify-card,
+    body[data-xbox="true"] .cast-card,
+    body[data-xbox="true"] .now-playing-widget { background: linear-gradient(135deg, #185c18, #0b0f0b); border-color: #2ca52c; }
+    body[data-xbox="true"] .now-playing-widget strong,
+    body[data-xbox="true"] .spotify-open,
+    body[data-xbox="true"] .external-page-link { color: #8bf000; }
+    body[data-xbox="true"] .media-card .audio-art,
+    body[data-xbox="true"] .now-playing-art { background: radial-gradient(circle, #2ca52c, #0b0f0b); color: #8bf000; }
+    body[data-atari="true"] { background: radial-gradient(circle at 70% 15%, #b5521b 0, transparent 28%), linear-gradient(135deg, #120b08, #382016, #090604); color: #ffe8c2; }
+    body[data-atari="true"] .player,
+    body[data-atari="true"] .tabs,
+    body[data-atari="true"] .player-header { background: #160d09; }
+    body[data-atari="true"] .player { border: 3px solid #d17a28; box-shadow: 8px 8px 0 #6f3218; }
+    body[data-atari="true"] .player-header h1,
+    body[data-atari="true"] .tab { color: #ffe8c2; }
+    body[data-atari="true"] .tab:hover { background: #6f3218; }
+    body[data-atari="true"] .tab[aria-selected="true"] { background: #d17a28; color: #160d09; }
+    body[data-atari="true"] .controls,
+    body[data-atari="true"] .library { background: linear-gradient(#6f3218, #160d09); }
+    body[data-atari="true"] button,
+    body[data-atari="true"] .upload,
+    body[data-atari="true"] .media-card,
+    body[data-atari="true"] .settings-option { background: #2a1710; border: 2px solid #d17a28; color: #ffe8c2; }
+    body[data-atari="true"] button:hover,
+    body[data-atari="true"] .upload:hover { background: #6f3218; }
+    body[data-atari="true"] .play,
+    body[data-atari="true"] .save-button,
+    body[data-atari="true"] .quick-controls .quick-play,
+    body[data-atari="true"] .spotify-mark { background: #f0c44f; color: #160d09; }
+    body[data-atari="true"] .play:hover,
+    body[data-atari="true"] .save-button:hover { background: #ffe08a; }
+    body[data-atari="true"] input[type="range"],
+    body[data-atari="true"] input[type="checkbox"],
+    body[data-atari="true"] .search-box:focus,
+    body[data-atari="true"] .search-select:focus { accent-color: #f0c44f; border-color: #f0c44f; }
+    body[data-atari="true"] .search-box,
+    body[data-atari="true"] .search-select { border-color: #d17a28; background: #160d09; color: #ffe8c2; }
+    body[data-atari="true"] .spotify-card,
+    body[data-atari="true"] .cast-card,
+    body[data-atari="true"] .now-playing-widget { background: linear-gradient(135deg, #6f3218, #160d09); border-color: #d17a28; }
+    body[data-atari="true"] .now-playing-widget strong,
+    body[data-atari="true"] .spotify-open,
+    body[data-atari="true"] .external-page-link { color: #f0c44f; }
+    body[data-atari="true"] .media-card .audio-art,
+    body[data-atari="true"] .now-playing-art { background: radial-gradient(circle, #d17a28, #160d09); color: #f0c44f; }
+    body[data-c64="true"] { background: #40318d; color: #7869c4; }
+    body[data-c64="true"] .player,
+    body[data-c64="true"] .tabs,
+    body[data-c64="true"] .player-header { background: #40318d; }
+    body[data-c64="true"] .player { border: 4px solid #7869c4; box-shadow: 8px 8px 0 #21165e; }
+    body[data-c64="true"] .player-header h1,
+    body[data-c64="true"] .tab { color: #7869c4; }
+    body[data-c64="true"] .tab:hover { background: #5142a1; }
+    body[data-c64="true"] .tab[aria-selected="true"] { background: #7869c4; color: #40318d; }
+    body[data-c64="true"] .controls,
+    body[data-c64="true"] .library { background: #40318d; }
+    body[data-c64="true"] button,
+    body[data-c64="true"] .upload,
+    body[data-c64="true"] .media-card,
+    body[data-c64="true"] .settings-option { background: #5142a1; border: 2px solid #7869c4; color: #d8d1ff; }
+    body[data-c64="true"] button:hover,
+    body[data-c64="true"] .upload:hover { background: #7869c4; color: #21165e; }
+    body[data-c64="true"] .play,
+    body[data-c64="true"] .save-button,
+    body[data-c64="true"] .quick-controls .quick-play,
+    body[data-c64="true"] .spotify-mark { background: #7869c4; color: #21165e; }
+    body[data-c64="true"] .play:hover,
+    body[data-c64="true"] .save-button:hover { background: #a69be5; }
+    body[data-c64="true"] input[type="range"],
+    body[data-c64="true"] input[type="checkbox"],
+    body[data-c64="true"] .search-box:focus,
+    body[data-c64="true"] .search-select:focus { accent-color: #7869c4; border-color: #7869c4; }
+    body[data-c64="true"] .search-box,
+    body[data-c64="true"] .search-select { border-color: #7869c4; background: #21165e; color: #d8d1ff; }
+    body[data-c64="true"] .spotify-card,
+    body[data-c64="true"] .cast-card,
+    body[data-c64="true"] .now-playing-widget { background: #5142a1; border-color: #7869c4; }
+    body[data-c64="true"] .now-playing-widget strong,
+    body[data-c64="true"] .spotify-open,
+    body[data-c64="true"] .external-page-link { color: #d8d1ff; }
+    body[data-c64="true"] .media-card .audio-art,
+    body[data-c64="true"] .now-playing-art { background: radial-gradient(circle, #7869c4, #21165e); color: #d8d1ff; }
+    body[data-genesis="true"] { background: radial-gradient(circle at 75% 15%, #174b91 0, transparent 28%), linear-gradient(135deg, #03050a, #0b2147, #120507); color: #e7efff; }
+    body[data-genesis="true"] .player,
+    body[data-genesis="true"] .tabs,
+    body[data-genesis="true"] .player-header { background: #05070d; }
+    body[data-genesis="true"] .player { border: 3px solid #1b4f91; box-shadow: 8px 8px 0 #070b16; }
+    body[data-genesis="true"] .player-header h1,
+    body[data-genesis="true"] .tab { color: #e7efff; }
+    body[data-genesis="true"] .tab:hover { background: #123b72; }
+    body[data-genesis="true"] .tab[aria-selected="true"] { background: #1b4f91; color: #fff; }
+    body[data-genesis="true"] .controls,
+    body[data-genesis="true"] .library { background: linear-gradient(#123b72, #05070d); }
+    body[data-genesis="true"] button,
+    body[data-genesis="true"] .upload,
+    body[data-genesis="true"] .media-card,
+    body[data-genesis="true"] .settings-option { background: #101827; border: 2px solid #1b4f91; color: #e7efff; }
+    body[data-genesis="true"] button:hover,
+    body[data-genesis="true"] .upload:hover { background: #174b91; }
+    body[data-genesis="true"] .play,
+    body[data-genesis="true"] .save-button,
+    body[data-genesis="true"] .quick-controls .quick-play,
+    body[data-genesis="true"] .spotify-mark { background: #e52521; color: #fff; }
+    body[data-genesis="true"] .play:hover,
+    body[data-genesis="true"] .save-button:hover { background: #ff514b; }
+    body[data-genesis="true"] input[type="range"],
+    body[data-genesis="true"] input[type="checkbox"],
+    body[data-genesis="true"] .search-box:focus,
+    body[data-genesis="true"] .search-select:focus { accent-color: #e52521; border-color: #e52521; }
+    body[data-genesis="true"] .search-box,
+    body[data-genesis="true"] .search-select { border-color: #1b4f91; background: #05070d; color: #e7efff; }
+    body[data-genesis="true"] .spotify-card,
+    body[data-genesis="true"] .cast-card,
+    body[data-genesis="true"] .now-playing-widget { background: linear-gradient(135deg, #123b72, #05070d); border-color: #1b4f91; }
+    body[data-genesis="true"] .now-playing-widget strong,
+    body[data-genesis="true"] .spotify-open,
+    body[data-genesis="true"] .external-page-link { color: #ff514b; }
+    body[data-genesis="true"] .media-card .audio-art,
+    body[data-genesis="true"] .now-playing-art { background: radial-gradient(circle, #1b4f91, #05070d); color: #ff514b; }
+    body[data-ubuntu="true"] { background: radial-gradient(circle at 75% 15%, #e95420 0, transparent 28%), linear-gradient(135deg, #1d0b24, #3f1d4d, #120914); color: #fff4ed; }
+    body[data-ubuntu="true"] .player,
+    body[data-ubuntu="true"] .tabs,
+    body[data-ubuntu="true"] .player-header { background: #2c0f36; }
+    body[data-ubuntu="true"] .player { border: 2px solid #e95420; box-shadow: 0 20px 55px #16051baa; }
+    body[data-ubuntu="true"] .player-header h1,
+    body[data-ubuntu="true"] .tab { color: #fff4ed; }
+    body[data-ubuntu="true"] .tab:hover { background: #5e275f; }
+    body[data-ubuntu="true"] .tab[aria-selected="true"] { background: #e95420; color: #fff; }
+    body[data-ubuntu="true"] .controls,
+    body[data-ubuntu="true"] .library { background: linear-gradient(#5e275f, #1d0b24); }
+    body[data-ubuntu="true"] button,
+    body[data-ubuntu="true"] .upload,
+    body[data-ubuntu="true"] .media-card,
+    body[data-ubuntu="true"] .settings-option { background: #4b1f52; border: 1px solid #e95420; color: #fff4ed; }
+    body[data-ubuntu="true"] button:hover,
+    body[data-ubuntu="true"] .upload:hover { background: #713276; }
+    body[data-ubuntu="true"] .play,
+    body[data-ubuntu="true"] .save-button,
+    body[data-ubuntu="true"] .quick-controls .quick-play,
+    body[data-ubuntu="true"] .spotify-mark { background: #e95420; color: #fff; }
+    body[data-ubuntu="true"] .play:hover,
+    body[data-ubuntu="true"] .save-button:hover { background: #ff784d; }
+    body[data-ubuntu="true"] input[type="range"],
+    body[data-ubuntu="true"] input[type="checkbox"],
+    body[data-ubuntu="true"] .search-box:focus,
+    body[data-ubuntu="true"] .search-select:focus { accent-color: #e95420; border-color: #e95420; }
+    body[data-ubuntu="true"] .search-box,
+    body[data-ubuntu="true"] .search-select { border-color: #b44a6c; background: #2c0f36; color: #fff4ed; }
+    body[data-ubuntu="true"] .spotify-card,
+    body[data-ubuntu="true"] .cast-card,
+    body[data-ubuntu="true"] .now-playing-widget { background: linear-gradient(135deg, #5e275f, #2c0f36); border-color: #e95420; }
+    body[data-ubuntu="true"] .now-playing-widget strong,
+    body[data-ubuntu="true"] .spotify-open,
+    body[data-ubuntu="true"] .external-page-link { color: #ff784d; }
+    body[data-ubuntu="true"] .media-card .audio-art,
+    body[data-ubuntu="true"] .now-playing-art { background: radial-gradient(circle, #e95420, #2c0f36); color: #ffb39d; }
+    body[data-batman="true"] { background: radial-gradient(circle at 75% 15%, #3a3d48 0, transparent 28%), linear-gradient(135deg, #050506, #17191f, #08090c); color: #f2f2df; }
+    body[data-batman="true"] .player,
+    body[data-batman="true"] .tabs,
+    body[data-batman="true"] .player-header { background: #090a0d; }
+    body[data-batman="true"] .player { border: 3px solid #4d505c; box-shadow: 8px 8px 0 #000; }
+    body[data-batman="true"] .player-header h1,
+    body[data-batman="true"] .tab { color: #f2f2df; }
+    body[data-batman="true"] .tab:hover { background: #292c35; }
+    body[data-batman="true"] .tab[aria-selected="true"] { background: #c9a227; color: #08090c; }
+    body[data-batman="true"] .controls,
+    body[data-batman="true"] .library { background: linear-gradient(#292c35, #090a0d); }
+    body[data-batman="true"] button,
+    body[data-batman="true"] .upload,
+    body[data-batman="true"] .media-card,
+    body[data-batman="true"] .settings-option { background: #17191f; border: 2px solid #4d505c; color: #f2f2df; }
+    body[data-batman="true"] button:hover,
+    body[data-batman="true"] .upload:hover { background: #292c35; }
+    body[data-batman="true"] .play,
+    body[data-batman="true"] .save-button,
+    body[data-batman="true"] .quick-controls .quick-play,
+    body[data-batman="true"] .spotify-mark { background: #c9a227; color: #08090c; }
+    body[data-batman="true"] .play:hover,
+    body[data-batman="true"] .save-button:hover { background: #efd15a; }
+    body[data-batman="true"] input[type="range"],
+    body[data-batman="true"] input[type="checkbox"],
+    body[data-batman="true"] .search-box:focus,
+    body[data-batman="true"] .search-select:focus { accent-color: #c9a227; border-color: #c9a227; }
+    body[data-batman="true"] .search-box,
+    body[data-batman="true"] .search-select { border-color: #4d505c; background: #090a0d; color: #f2f2df; }
+    body[data-batman="true"] .spotify-card,
+    body[data-batman="true"] .cast-card,
+    body[data-batman="true"] .now-playing-widget { background: linear-gradient(135deg, #292c35, #090a0d); border-color: #4d505c; }
+    body[data-batman="true"] .now-playing-widget strong,
+    body[data-batman="true"] .spotify-open,
+    body[data-batman="true"] .external-page-link { color: #efd15a; }
+    body[data-batman="true"] .media-card .audio-art,
+    body[data-batman="true"] .now-playing-art { background: radial-gradient(circle, #4d505c, #090a0d); color: #efd15a; }
+    body[data-robin="true"] { background: radial-gradient(circle at 75% 15%, #1f8a55 0, transparent 28%), linear-gradient(135deg, #07130d, #202f1b, #160608); color: #fff3cf; }
+    body[data-robin="true"] .player,
+    body[data-robin="true"] .tabs,
+    body[data-robin="true"] .player-header { background: #0b1710; }
+    body[data-robin="true"] .player { border: 3px solid #d52b2b; box-shadow: 8px 8px 0 #050805; }
+    body[data-robin="true"] .player-header h1,
+    body[data-robin="true"] .tab { color: #fff3cf; }
+    body[data-robin="true"] .tab:hover { background: #17603d; }
+    body[data-robin="true"] .tab[aria-selected="true"] { background: #d52b2b; color: #fff; }
+    body[data-robin="true"] .controls,
+    body[data-robin="true"] .library { background: linear-gradient(#17603d, #0b1710); }
+    body[data-robin="true"] button,
+    body[data-robin="true"] .upload,
+    body[data-robin="true"] .media-card,
+    body[data-robin="true"] .settings-option { background: #123b28; border: 2px solid #d52b2b; color: #fff3cf; }
+    body[data-robin="true"] button:hover,
+    body[data-robin="true"] .upload:hover { background: #1f8a55; }
+    body[data-robin="true"] .play,
+    body[data-robin="true"] .save-button,
+    body[data-robin="true"] .quick-controls .quick-play,
+    body[data-robin="true"] .spotify-mark { background: #f1c232; color: #111; }
+    body[data-robin="true"] .play:hover,
+    body[data-robin="true"] .save-button:hover { background: #ffe17a; }
+    body[data-robin="true"] input[type="range"],
+    body[data-robin="true"] input[type="checkbox"],
+    body[data-robin="true"] .search-box:focus,
+    body[data-robin="true"] .search-select:focus { accent-color: #f1c232; border-color: #f1c232; }
+    body[data-robin="true"] .search-box,
+    body[data-robin="true"] .search-select { border-color: #d52b2b; background: #0b1710; color: #fff3cf; }
+    body[data-robin="true"] .spotify-card,
+    body[data-robin="true"] .cast-card,
+    body[data-robin="true"] .now-playing-widget { background: linear-gradient(135deg, #17603d, #0b1710); border-color: #d52b2b; }
+    body[data-robin="true"] .now-playing-widget strong,
+    body[data-robin="true"] .spotify-open,
+    body[data-robin="true"] .external-page-link { color: #f1c232; }
+    body[data-robin="true"] .media-card .audio-art,
+    body[data-robin="true"] .now-playing-art { background: radial-gradient(circle, #1f8a55, #0b1710); color: #f1c232; }
+    body[data-joker="true"] { background: radial-gradient(circle at 75% 15%, #5f1b8d 0, transparent 28%), linear-gradient(135deg, #10051c, #24133c, #071b10); color: #f0f7d4; }
+    body[data-joker="true"] .player,
+    body[data-joker="true"] .tabs,
+    body[data-joker="true"] .player-header { background: #160a25; }
+    body[data-joker="true"] .player { border: 3px solid #91d51f; box-shadow: 8px 8px 0 #3c0d58; }
+    body[data-joker="true"] .player-header h1,
+    body[data-joker="true"] .tab { color: #f0f7d4; }
+    body[data-joker="true"] .tab:hover { background: #492060; }
+    body[data-joker="true"] .tab[aria-selected="true"] { background: #91d51f; color: #160a25; }
+    body[data-joker="true"] .controls,
+    body[data-joker="true"] .library { background: linear-gradient(#492060, #160a25); }
+    body[data-joker="true"] button,
+    body[data-joker="true"] .upload,
+    body[data-joker="true"] .media-card,
+    body[data-joker="true"] .settings-option { background: #28133d; border: 2px solid #91d51f; color: #f0f7d4; }
+    body[data-joker="true"] button:hover,
+    body[data-joker="true"] .upload:hover { background: #5f1b8d; }
+    body[data-joker="true"] .play,
+    body[data-joker="true"] .save-button,
+    body[data-joker="true"] .quick-controls .quick-play,
+    body[data-joker="true"] .spotify-mark { background: #d92f8a; color: #fff; }
+    body[data-joker="true"] .play:hover,
+    body[data-joker="true"] .save-button:hover { background: #f15caf; }
+    body[data-joker="true"] input[type="range"],
+    body[data-joker="true"] input[type="checkbox"],
+    body[data-joker="true"] .search-box:focus,
+    body[data-joker="true"] .search-select:focus { accent-color: #91d51f; border-color: #91d51f; }
+    body[data-joker="true"] .search-box,
+    body[data-joker="true"] .search-select { border-color: #91d51f; background: #160a25; color: #f0f7d4; }
+    body[data-joker="true"] .spotify-card,
+    body[data-joker="true"] .cast-card,
+    body[data-joker="true"] .now-playing-widget { background: linear-gradient(135deg, #492060, #160a25); border-color: #91d51f; }
+    body[data-joker="true"] .now-playing-widget strong,
+    body[data-joker="true"] .spotify-open,
+    body[data-joker="true"] .external-page-link { color: #d92f8a; }
+    body[data-joker="true"] .media-card .audio-art,
+    body[data-joker="true"] .now-playing-art { background: radial-gradient(circle, #5f1b8d, #160a25); color: #91d51f; }
+    body[data-starwars="true"] { background: radial-gradient(circle at 75% 15%, #143b70 0, transparent 28%), #020308; color: #e9f3ff; }
+    body[data-starwars="true"]::before { position: fixed; z-index: -1; inset: 0; background-image: radial-gradient(circle, #fff 0 1px, transparent 1px), radial-gradient(circle, #78bfff 0 1px, transparent 1px); background-position: 0 0, 42px 35px; background-size: 90px 100px, 130px 140px; content: ''; opacity: .35; }
+    body[data-starwars="true"] .player,
+    body[data-starwars="true"] .tabs,
+    body[data-starwars="true"] .player-header { background: #050711ee; }
+    body[data-starwars="true"] .player { border: 2px solid #526b91; box-shadow: 0 20px 55px #000; }
+    body[data-starwars="true"] .player-header h1,
+    body[data-starwars="true"] .tab { color: #e9f3ff; }
+    body[data-starwars="true"] .tab:hover { background: #182f55; }
+    body[data-starwars="true"] .tab[aria-selected="true"] { background: #e5c54a; color: #10151f; }
+    body[data-starwars="true"] .controls,
+    body[data-starwars="true"] .library { background: linear-gradient(#13294d, #050711); }
+    body[data-starwars="true"] button,
+    body[data-starwars="true"] .upload,
+    body[data-starwars="true"] .media-card,
+    body[data-starwars="true"] .settings-option { background: #101827; border: 1px solid #526b91; color: #e9f3ff; }
+    body[data-starwars="true"] button:hover,
+    body[data-starwars="true"] .upload:hover { background: #182f55; }
+    body[data-starwars="true"] .play,
+    body[data-starwars="true"] .save-button,
+    body[data-starwars="true"] .quick-controls .quick-play,
+    body[data-starwars="true"] .spotify-mark { background: #38d9ff; color: #031018; }
+    body[data-starwars="true"] .play:hover,
+    body[data-starwars="true"] .save-button:hover { background: #8beaff; }
+    body[data-starwars="true"] input[type="range"],
+    body[data-starwars="true"] input[type="checkbox"],
+    body[data-starwars="true"] .search-box:focus,
+    body[data-starwars="true"] .search-select:focus { accent-color: #38d9ff; border-color: #38d9ff; }
+    body[data-starwars="true"] .search-box,
+    body[data-starwars="true"] .search-select { border-color: #526b91; background: #050711; color: #e9f3ff; }
+    body[data-starwars="true"] .spotify-card,
+    body[data-starwars="true"] .cast-card,
+    body[data-starwars="true"] .now-playing-widget { background: linear-gradient(135deg, #182f55, #050711); border-color: #526b91; }
+    body[data-starwars="true"] .now-playing-widget strong,
+    body[data-starwars="true"] .spotify-open,
+    body[data-starwars="true"] .external-page-link { color: #e5c54a; }
+    body[data-starwars="true"] .media-card .audio-art,
+    body[data-starwars="true"] .now-playing-art { background: radial-gradient(circle, #526b91, #050711); color: #38d9ff; }
+    body[data-midnight-skys="true"] { background: radial-gradient(circle at 75% 15%, #273b78 0, transparent 28%), linear-gradient(135deg, #02040c, #0b1228, #03050d); color: #dbe7ff; }
+    body[data-midnight-skys="true"] .player,
+    body[data-midnight-skys="true"] .tabs,
+    body[data-midnight-skys="true"] .player-header { background: #050817; }
+    body[data-midnight-skys="true"] .player { border: 2px solid #536ca8; box-shadow: 0 20px 55px #000b; }
+    body[data-midnight-skys="true"] .player-header h1,
+    body[data-midnight-skys="true"] .tab { color: #dbe7ff; }
+    body[data-midnight-skys="true"] .tab:hover { background: #172653; }
+    body[data-midnight-skys="true"] .tab[aria-selected="true"] { background: #536ca8; color: #fff; }
+    body[data-midnight-skys="true"] .controls,
+    body[data-midnight-skys="true"] .library { background: linear-gradient(#172653, #050817); }
+    body[data-midnight-skys="true"] button,
+    body[data-midnight-skys="true"] .upload,
+    body[data-midnight-skys="true"] .media-card,
+    body[data-midnight-skys="true"] .settings-option { background: #101a38; border: 1px solid #536ca8; color: #dbe7ff; }
+    body[data-midnight-skys="true"] button:hover,
+    body[data-midnight-skys="true"] .upload:hover { background: #273b78; }
+    body[data-midnight-skys="true"] .play,
+    body[data-midnight-skys="true"] .save-button,
+    body[data-midnight-skys="true"] .quick-controls .quick-play,
+    body[data-midnight-skys="true"] .spotify-mark { background: #9bbcff; color: #071021; }
+    body[data-midnight-skys="true"] .play:hover,
+    body[data-midnight-skys="true"] .save-button:hover { background: #c4d9ff; }
+    body[data-midnight-skys="true"] input[type="range"],
+    body[data-midnight-skys="true"] input[type="checkbox"],
+    body[data-midnight-skys="true"] .search-box:focus,
+    body[data-midnight-skys="true"] .search-select:focus { accent-color: #9bbcff; border-color: #9bbcff; }
+    body[data-midnight-skys="true"] .search-box,
+    body[data-midnight-skys="true"] .search-select { border-color: #536ca8; background: #050817; color: #dbe7ff; }
+    body[data-midnight-skys="true"] .spotify-card,
+    body[data-midnight-skys="true"] .cast-card,
+    body[data-midnight-skys="true"] .now-playing-widget { background: linear-gradient(135deg, #172653, #050817); border-color: #536ca8; }
+    body[data-midnight-skys="true"] .now-playing-widget strong,
+    body[data-midnight-skys="true"] .spotify-open,
+    body[data-midnight-skys="true"] .external-page-link { color: #9bbcff; }
+    body[data-midnight-skys="true"] .media-card .audio-art,
+    body[data-midnight-skys="true"] .now-playing-art { background: radial-gradient(circle, #536ca8, #050817); color: #9bbcff; }
+    body[data-minecraft="true"] { background: linear-gradient(135deg, #5c913b, #8b5a2b 48%, #38464b); color: #f1f5df; }
+    body[data-minecraft="true"] .player,
+    body[data-minecraft="true"] .tabs,
+    body[data-minecraft="true"] .player-header { background: #263238; }
+    body[data-minecraft="true"] .player { border: 4px solid #5c913b; box-shadow: 8px 8px 0 #2e1b0e; border-radius: 4px; }
+    body[data-minecraft="true"] .player-header h1,
+    body[data-minecraft="true"] .tab { color: #f1f5df; }
+    body[data-minecraft="true"] .tab:hover { background: #3f6f2b; }
+    body[data-minecraft="true"] .tab[aria-selected="true"] { background: #5c913b; color: #fff; }
+    body[data-minecraft="true"] .controls,
+    body[data-minecraft="true"] .library { background: linear-gradient(#405a64, #263238); }
+    body[data-minecraft="true"] button,
+    body[data-minecraft="true"] .upload,
+    body[data-minecraft="true"] .media-card,
+    body[data-minecraft="true"] .settings-option { background: #526d78; border: 3px solid #263238; border-radius: 4px; color: #f1f5df; }
+    body[data-minecraft="true"] button:hover,
+    body[data-minecraft="true"] .upload:hover { background: #6f8f9a; }
+    body[data-minecraft="true"] .play,
+    body[data-minecraft="true"] .save-button,
+    body[data-minecraft="true"] .quick-controls .quick-play,
+    body[data-minecraft="true"] .spotify-mark { background: #42d9f5; color: #08323a; }
+    body[data-minecraft="true"] .play:hover,
+    body[data-minecraft="true"] .save-button:hover { background: #8cecf9; }
+    body[data-minecraft="true"] input[type="range"],
+    body[data-minecraft="true"] input[type="checkbox"],
+    body[data-minecraft="true"] .search-box:focus,
+    body[data-minecraft="true"] .search-select:focus { accent-color: #42d9f5; border-color: #42d9f5; }
+    body[data-minecraft="true"] .search-box,
+    body[data-minecraft="true"] .search-select { border-color: #5c913b; background: #263238; color: #f1f5df; border-radius: 4px; }
+    body[data-minecraft="true"] .spotify-card,
+    body[data-minecraft="true"] .cast-card,
+    body[data-minecraft="true"] .now-playing-widget { background: linear-gradient(135deg, #405a64, #263238); border-color: #5c913b; border-radius: 4px; }
+    body[data-minecraft="true"] .now-playing-widget strong,
+    body[data-minecraft="true"] .spotify-open,
+    body[data-minecraft="true"] .external-page-link { color: #42d9f5; }
+    body[data-minecraft="true"] .media-card .audio-art,
+    body[data-minecraft="true"] .now-playing-art { background: linear-gradient(135deg, #5c913b, #8b5a2b); color: #42d9f5; }
+    body[data-spaceballs="true"] .spaceballs-easter-egg { position: fixed; right: auto; bottom: 14px; left: 14px; z-index: 10; display: block; padding: 8px 11px; border: 1px solid #ff4f9a; border-radius: 8px; background: #090d22ee; color: #ff83b8; box-shadow: 0 0 18px #ff4f9a66; font-size: 12px; letter-spacing: .06em; }
+    .tab-close { background: transparent; color: #fff; }
+    .tab-close:hover { background: #c72f68; color: #fff; }
+    .tab-close.is-closing { background: #35a853; color: #fff; }
+    .upload-status { margin: 0 0 20px; }
+    .upload-status[hidden] { display: none; }
+    .upload-status-line { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: #d7bfdf; font-size: 13px; }
+    .upload-progress { height: 7px; overflow: hidden; border-radius: 999px; background: #150b20; }
+    .upload-progress-fill { height: 100%; width: 0; border-radius: inherit; background: #b8f529; transition: width .18s ease; }
+    @media (max-width: 1200px) { .now-playing-widget { position: static; width: auto; margin: 12px 16px 0; } }
+    @media (max-width: 520px) { .controls { padding: 12px; } .volume { width: auto; } .volume input { width: 55px; } .toolbar { gap: 7px; flex-wrap: wrap; } button { width: 38px; height: 38px; } .upload { height: 38px; } .search-filters { grid-template-columns: 1fr; } .spotify-card, .youtube-controls, .spotify-search, .youtube-search { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main class="player" aria-label="Media player">
+    <header class="player-header"><h1>Welcome To Imediate Player!</h1></header>
+    <aside class="now-playing-widget" aria-live="polite"><strong>Now playing</strong><span id="nowPlayingWidgetTitle">Nothing playing</span></aside>
+    <nav class="tabs" role="tablist" aria-label="Media player sections">
+      <button id="playerTab" class="tab" type="button" role="tab" aria-controls="playerPanel" aria-selected="true">Player<span class="tab-close" data-close-tab="player" role="button" tabindex="0" aria-label="Close Player tab">x</span></button>
+      <button id="libraryTab" class="tab" type="button" role="tab" aria-controls="libraryPanel" aria-selected="false">Library<span class="tab-close" data-close-tab="library" role="button" tabindex="0" aria-label="Close Library tab">x</span></button>
+      <button id="searchTab" class="tab" type="button" role="tab" aria-controls="searchPanel" aria-selected="false">Search<span class="tab-close" data-close-tab="search" role="button" tabindex="0" aria-label="Close Search tab">x</span></button>
+      <button id="integrationTab" class="tab" type="button" role="tab" aria-controls="integrationPanel" aria-selected="false">Integration<span class="tab-close" data-close-tab="integration" role="button" tabindex="0" aria-label="Close Integration tab">x</span></button>
+      <button id="castTab" class="tab" type="button" role="tab" aria-controls="castPanel" aria-selected="false">Cast<span class="tab-close" data-close-tab="cast" role="button" tabindex="0" aria-label="Close Cast tab">x</span></button>
+      <button id="settingsTab" class="tab" type="button" role="tab" aria-controls="settingsPanel" aria-selected="false">Settings</button>
+    </nav>
+    <section id="playerPanel" class="panel" role="tabpanel" aria-labelledby="playerTab">
+    <div class="player-layout">
+    <div class="player-main-area">
+    <div class="media-wrap">
+      <video id="video" poster="https://interactive-examples.mdn.mozilla.net/media/examples/flower.jpg">
+        <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
+        Your browser does not support HTML video.
+      </video>
+      <div id="nowPlayingArt" class="now-playing-art" hidden>
+        <img id="nowPlayingCover" alt="Album cover" hidden>
+        <svg id="nowPlayingFallback" class="music-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13M9 18a3 3 0 1 1-2-3 3 3 0 0 1 2 3zm10-2a3 3 0 1 1-2-3 3 3 0 0 1 2 3z"/></svg>
+        <span id="nowPlayingTitle"></span>
+      </div>
+      <div id="quickControls" class="quick-controls" hidden aria-label="Quick fullscreen controls">
+        <div class="quick-timeline"><span id="quickCurrentTime">0:00</span><input id="quickSeek" type="range" min="0" max="100" value="0" step="0.1" aria-label="Seek"><span id="quickDuration">0:00</span></div>
+        <div class="quick-buttons">
+          <button id="quickBack" type="button" aria-label="Back 10 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M8 12h4"/></svg></button>
+          <button id="quickPlay" class="quick-play" type="button" aria-label="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></button>
+          <button id="quickForward" type="button" aria-label="Forward 10 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5M12 12h4"/></svg></button>
+          <button id="quickMute" type="button" aria-label="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4zM19 9a4 4 0 0 1 0 6M21 6a8 8 0 0 1 0 12"/></svg></button>
+          <button id="quickFullscreen" type="button" aria-label="Exit fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <section class="controls" aria-label="Playback controls">
+      <div class="timeline">
+        <span id="currentTime">0:00</span>
+        <input id="seek" type="range" min="0" max="100" value="0" step="0.1" aria-label="Seek">
+        <span id="duration">0:00</span>
+      </div>
+      <div class="toolbar">
+        <label class="upload" for="fileUpload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M5 14v5h14v-5"/></svg>
+          Open file
+          <input id="fileUpload" type="file" accept="video/*,audio/*">
+        </label>
+        <button id="play" class="play" type="button" aria-label="Play">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
+        </button>
+        <button id="back" type="button" aria-label="Back 10 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M8 12h4"/></svg></button>
+        <button id="forward" type="button" aria-label="Forward 10 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5M12 12h4"/></svg></button>
+        <div class="volume">
+          <button id="mute" type="button" aria-label="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4zM19 9a4 4 0 0 1 0 6M21 6a8 8 0 0 1 0 12"/></svg></button>
+          <input id="volume" type="range" min="0" max="1" value="1" step="0.05" aria-label="Volume">
+        </div>
+        <span class="spacer"></span>
+        <button id="fullscreen" type="button" aria-label="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg></button>
+      </div>
+    </section>
+    </div>
+    </div>
+    </section>
+    <section id="libraryPanel" class="panel library" role="tabpanel" aria-labelledby="libraryTab" hidden>
+      <div class="library-heading">
+        <div><h1>Your library</h1><p>Uploaded media is saved locally and remains available after refresh.</p></div>
+        <div class="library-actions">
+          <label class="upload" for="libraryUpload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M5 14v5h14v-5"/></svg>Add media<input id="libraryUpload" type="file" accept="video/*,audio/*" multiple></label>
+          <label class="upload" for="folderUpload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6l2 2h8v12H4z"/></svg>Add folder<input id="folderUpload" type="file" accept="audio/*" webkitdirectory directory multiple></label>
+          <button id="saveLibrary" class="library-button save-button" type="button">Save to folder</button>
+          <button id="clearLibrary" class="library-button" type="button">Clear library</button>
+        </div>
+      </div>
+      <div id="uploadStatus" class="upload-status" hidden aria-live="polite">
+        <div class="upload-status-line"><span id="uploadStatusText">Preparing upload</span><span id="uploadStatusCount"></span></div>
+        <div id="uploadProgress" class="upload-progress" role="progressbar" aria-label="Library upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="uploadProgressFill" class="upload-progress-fill"></div></div>
+      </div>
+      <div id="libraryGrid" class="library-grid"></div>
+    </section>
+    <section id="searchPanel" class="panel library" role="tabpanel" aria-labelledby="searchTab" hidden>
+      <div class="library-heading"><div><h1>Search your songs</h1><p>Find music in your saved library.</p></div></div>
+      <div class="search-filters">
+        <select id="typeFilter" class="search-select" aria-label="Filter by file type"><option value="all">All types</option><option value="audio">Audio</option><option value="video">Video</option></select>
+        <input id="artistFilter" class="search-box" type="search" placeholder="Artist name" aria-label="Filter by artist">
+        <input id="searchInput" class="search-box" type="search" placeholder="Song name" aria-label="Search by song name">
+      </div>
+      <div id="searchGrid" class="library-grid"></div>
+    </section>
+    <section id="integrationPanel" class="panel library" role="tabpanel" aria-labelledby="integrationTab" hidden>
+      <nav id="integrationTabs" class="integration-tabs" role="tablist" aria-label="Integration sections">
+        <button id="spotifyTab" class="tab" type="button" role="tab" aria-controls="spotifyPanel" aria-selected="true">Spotify</button>
+        <button id="youtubeTab" class="tab" type="button" role="tab" aria-controls="youtubePanel" aria-selected="false">YouTube</button>
+        <button id="youtubeWatchTab" class="tab" type="button" role="tab" aria-controls="youtubeWatchPanel" aria-selected="false">Watch YouTube</button>
+        <button id="youtubeEmbedTab" class="tab" type="button" role="tab" aria-controls="youtubeEmbedPanel" aria-selected="false">YouTube Embed</button>
+        <button id="spotifySaverTab" class="tab" type="button" role="tab" aria-controls="spotifySaverPanel" aria-selected="false">Spotify Saver</button>
+      </nav>
+    <section id="spotifyPanel" class="panel" role="tabpanel" aria-labelledby="spotifyTab" hidden>
+      <div class="library-heading"><div><h1>Spotify</h1><p>Search Spotify or paste a playlist link to play it here.</p></div></div>
+      <form id="spotifySearchForm" class="spotify-search"><input id="spotifySearchInput" class="search-box" type="search" placeholder="Search Spotify songs" aria-label="Search Spotify songs"><button class="library-button save-button" type="submit">Search Spotify</button><button id="clearSpotifySearch" class="library-button" type="button">Clear</button></form>
+      <p id="spotifySearchMessage" class="import-message" aria-live="polite"></p>
+      <div class="playlist-import"><input id="spotifyInput" class="search-box" type="url" placeholder="https://open.spotify.com/playlist/..." aria-label="Spotify playlist link"><button id="loadSpotify" class="library-button save-button" type="button">Import playlist</button><button id="forgetSpotify" class="library-button" type="button">Forget saved playlist</button></div>
+      <p id="spotifyMessage" class="import-message" aria-live="polite"></p>
+      <article class="spotify-card">
+        <div class="spotify-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 9.5c4.8-1.4 9.5-.8 13.7 1.4M5.8 13c4-1 7.8-.5 11.2 1.2M6.7 16.1c3-.6 5.8-.2 8.1.9"/></svg></div>
+        <div class="spotify-copy"><h2 id="spotifyPlaylistTitle">Liked Songs</h2><p id="spotifyPlaylistDescription">Your saved songs from Spotify</p><a class="spotify-open" href="https://open.spotify.com/" target="_blank" rel="noopener">Open Spotify Home</a></div>
+      </article>
+      <iframe id="spotifyEmbed" class="spotify-embed" title="Spotify playlist player" src="https://open.spotify.com/embed/playlist/37i9dQZF1F5p3rmiWPIYgZ" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+    </section>
+    <section id="youtubePanel" class="panel library" role="tabpanel" aria-labelledby="youtubeTab" hidden>
+      <div class="library-heading"><div><h1>YouTube</h1><p>Search YouTube or paste a playlist link to play it here.</p></div></div>
+      <form id="youtubeSearchForm" class="youtube-search"><input id="youtubeSearchInput" class="search-box" type="search" placeholder="Search YouTube" aria-label="Search YouTube"><button class="library-button save-button" type="submit">Search YouTube</button><button id="clearYoutubeSearch" class="library-button" type="button">Clear</button></form>
+      <p id="youtubeSearchMessage" class="import-message" aria-live="polite"></p>
+      <div class="playlist-import"><input id="youtubeInput" class="search-box" type="url" placeholder="https://www.youtube.com/playlist?list=..." aria-label="YouTube playlist link"><button id="loadYoutube" class="library-button save-button" type="button">Import playlist</button><button id="forgetYoutube" class="library-button" type="button">Forget saved playlist</button></div>
+      <p id="youtubeMessage" class="import-message" aria-live="polite"></p>
+      <iframe id="youtubeEmbed" class="youtube-embed" title="YouTube player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen hidden></iframe>
+    </section>
+    <section id="youtubeWatchPanel" class="panel library" role="tabpanel" aria-labelledby="youtubeWatchTab" hidden>
+      <div class="library-heading"><div><h1>Watch YouTube</h1><p>Paste a YouTube video link or video ID to watch it inside the website.</p></div></div>
+      <form id="youtubeWatchForm" class="youtube-search"><input id="youtubeWatchInput" class="search-box" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube video link"><button class="library-button save-button" type="submit">Watch video</button><button id="clearYoutubeWatch" class="library-button" type="button">Clear</button></form>
+      <p id="youtubeWatchMessage" class="import-message" aria-live="polite"></p>
+      <iframe id="youtubeWatchEmbed" class="youtube-watch-embed" title="YouTube video player" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen hidden></iframe>
+    </section>
+    <section id="youtubeEmbedPanel" class="panel library" role="tabpanel" aria-labelledby="youtubeEmbedTab" hidden>
+      <div class="library-heading"><div><h1>YouTube Embed</h1><p>Open the YouTube embed demo inside the media player.</p></div></div>
+      <iframe class="external-page-embed" title="YouTube embed demo" src="youtube_embed.html"></iframe>
+    </section>
+    <section id="spotifySaverPanel" class="panel library" role="tabpanel" aria-labelledby="spotifySaverTab" hidden>
+      <div class="library-heading"><div><h1>Spotify Saver</h1><p>Use Spotify Saver directly inside the website.</p></div></div>
+      <iframe class="external-page-embed" title="Spotify Saver" src="https://cdn.spotisaver.net/" loading="lazy"></iframe>
+      <a class="external-page-link" href="https://cdn.spotisaver.net/" target="_blank" rel="noopener">Open Spotify Saver in a new tab</a>
+    </section>
+    </section>
+    <section id="castPanel" class="panel library" role="tabpanel" aria-labelledby="castTab" hidden>
+      <div class="library-heading"><div><h1>Cast</h1><p>Send the current audio or video to a compatible device.</p></div></div>
+      <article class="cast-card">
+        <h2>Play on another device</h2>
+        <p id="castMessage" aria-live="polite">Choose a compatible device to begin casting.</p>
+        <button id="castButton" class="library-button save-button" type="button">Choose device</button>
+      </article>
+    </section>
+    <section id="settingsPanel" class="panel library" role="tabpanel" aria-labelledby="settingsTab" hidden>
+      <div class="library-heading"><div><h1>Settings</h1><p>Choose which tabs stay visible. Your choices are saved on this device.</p></div></div>
+      <form id="settingsFilterForm" class="settings-filter-row">
+        <input id="settingsFilter" class="search-box settings-filter" type="search" placeholder="Filter settings by category" aria-label="Filter settings by category">
+        <button class="library-button save-button" type="submit">Go</button>
+      </form>
+      <div id="visibilitySettings" class="settings-group" data-settings-category="visibility">
+        <h2><a href="#visibilitySettings">Visibility</a></h2>
+        <div id="tabVisibilitySettings" class="settings-list"></div>
+        <button id="resetTabsButton" class="library-button" type="button">Reset tabs</button>
+      </div>
+      <div id="themesSettings" class="settings-group" data-settings-category="themes">
+        <h2><a href="#themesSettings">Themes</a></h2>
+        <p>If you do not select a theme, the default theme will be used.</p>
+        <label class="settings-option"><input id="alternateColorsToggle" type="checkbox"><span>Spider-Man theme</span></label>
+        <label class="settings-option"><input id="bubbleBeeToggle" type="checkbox"><span>Bubble Bee theme</span></label>
+        <label class="settings-option"><input id="geckoboyToggle" type="checkbox"><span>Geckoboy's theme</span></label>
+        <label class="settings-option"><input id="iceBearToggle" type="checkbox"><span>Ice Bear Theme</span></label>
+        <label class="settings-option"><input id="mushroomToggle" type="checkbox"><span>Mushroom Theme</span></label>
+        <label class="settings-option"><input id="girlyToggle" type="checkbox"><span>Girly theme</span></label>
+        <label class="settings-option"><input id="johnDeerToggle" type="checkbox"><span>John Deer Theme</span></label>
+        <label class="settings-option"><input id="banglesToggle" type="checkbox"><span>Bangles Theme</span></label>
+        <label class="settings-option"><input id="rgbToggle" type="checkbox"><span>RGB Theme</span></label>
+        <label class="settings-option"><input id="terminalToggle" type="checkbox"><span>Terminal Theme</span></label>
+        <label class="settings-option"><input id="windowsXpToggle" type="checkbox"><span>Windows XP Theme</span></label>
+        <label class="settings-option"><input id="retroMacToggle" type="checkbox"><span>Retro Mac Theme</span></label>
+        <label class="settings-option"><input id="gameboyToggle" type="checkbox"><span>Nintendo Game Boy Theme</span></label>
+        <label class="settings-option"><input id="snesToggle" type="checkbox"><span>SNES Theme</span></label>
+        <label class="settings-option"><input id="spaceballsToggle" type="checkbox"><span>Spaceballs Theme</span></label>
+        <label class="settings-option"><input id="ps2Toggle" type="checkbox"><span>PS2 Theme</span></label>
+        <label class="settings-option"><input id="xboxToggle" type="checkbox"><span>Xbox Theme</span></label>
+        <label class="settings-option"><input id="atariToggle" type="checkbox"><span>Atari Theme</span></label>
+        <label class="settings-option"><input id="c64Toggle" type="checkbox"><span>Commodore 64 Theme</span></label>
+        <label class="settings-option"><input id="genesisToggle" type="checkbox"><span>Sega Genesis Theme</span></label>
+        <label class="settings-option"><input id="ubuntuToggle" type="checkbox"><span>Ubuntu Linux Theme</span></label>
+        <label class="settings-option"><input id="batmanToggle" type="checkbox"><span>Batman Theme</span></label>
+        <label class="settings-option"><input id="robinToggle" type="checkbox"><span>Robin Theme</span></label>
+        <label class="settings-option"><input id="jokerToggle" type="checkbox"><span>Joker Theme</span></label>
+        <label class="settings-option"><input id="starwarsToggle" type="checkbox"><span>Star Wars Theme</span></label>
+        <label class="settings-option"><input id="midnightSkysToggle" type="checkbox"><span>Midnight Skys Theme</span></label>
+        <label class="settings-option"><input id="minecraftToggle" type="checkbox"><span>Minecraft Theme</span></label>
+      </div>
+      <div id="fontsSettings" class="settings-group" data-settings-category="fonts">
+        <h2><a href="#fontsSettings">Fonts</a></h2>
+        <p>Choose the base player font size in pixels.</p>
+        <select id="fontSizeSelect" class="search-select font-size-select" aria-label="Font size">
+          <option value="15">15px</option>
+          <option value="20">20px</option>
+          <option value="25">25px</option>
+          <option value="30">30px</option>
+          <option value="35">35px</option>
+          <option value="40">40px</option>
+          <option value="45">45px</option>
+          <option value="50">50px</option>
+        </select>
+        <select id="fontFamilySelect" class="search-select font-size-select" aria-label="Font family">
+          <option value="Inter, ui-sans-serif, system-ui, sans-serif">Inter</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="Courier New, monospace">Courier New</option>
+          <option value="Trebuchet MS, sans-serif">Trebuchet MS</option>
+          <option value="Verdana, sans-serif">Verdana</option>
+          <option value="Impact, sans-serif">Impact</option>
+        </select>
+      </div>
+      <div id="artworkSettings" class="settings-group" data-settings-category="artwork">
+        <h2><a href="#artworkSettings">Artwork</a></h2>
+        <p>Enable or disable album artwork in the Player, Library, and Search tabs.</p>
+        <label class="settings-option"><input id="artworkToggle" type="checkbox"><span>Show thumbnail art</span></label>
+      </div>
+      <button id="finishSettings" class="library-button save-button" type="button">Apply</button>
+    </section>
+  </main>
+  <div class="spaceballs-easter-egg" aria-hidden="true">Spaceballs the Media Player</div>
+  <script>
+    const video = document.getElementById('video');
+    const player = document.querySelector('.player');
+    const play = document.getElementById('play');
+    const seek = document.getElementById('seek');
+    const volume = document.getElementById('volume');
+    const currentTime = document.getElementById('currentTime');
+    const duration = document.getElementById('duration');
+    const mediaWrap = document.querySelector('.media-wrap');
+    const quickControls = document.getElementById('quickControls');
+    const quickPlay = document.getElementById('quickPlay');
+    const quickSeek = document.getElementById('quickSeek');
+    const quickCurrentTime = document.getElementById('quickCurrentTime');
+    const quickDuration = document.getElementById('quickDuration');
+    let quickControlsTimer;
+    const nowPlayingArt = document.getElementById('nowPlayingArt');
+    const nowPlayingCover = document.getElementById('nowPlayingCover');
+    const nowPlayingFallback = document.getElementById('nowPlayingFallback');
+    const nowPlayingTitle = document.getElementById('nowPlayingTitle');
+    const nowPlayingWidgetTitle = document.getElementById('nowPlayingWidgetTitle');
+    const fileUpload = document.getElementById('fileUpload');
+    const libraryUpload = document.getElementById('libraryUpload');
+    const folderUpload = document.getElementById('folderUpload');
+    const libraryGrid = document.getElementById('libraryGrid');
+    const playerTab = document.getElementById('playerTab');
+    const libraryTab = document.getElementById('libraryTab');
+    const searchTab = document.getElementById('searchTab');
+    const integrationTab = document.getElementById('integrationTab');
+    const castTab = document.getElementById('castTab');
+    const spotifyTab = document.getElementById('spotifyTab');
+    const youtubeTab = document.getElementById('youtubeTab');
+    const youtubeWatchTab = document.getElementById('youtubeWatchTab');
+    const youtubeEmbedTab = document.getElementById('youtubeEmbedTab');
+    const spotifySaverTab = document.getElementById('spotifySaverTab');
+    const settingsTab = document.getElementById('settingsTab');
+    const playerPanel = document.getElementById('playerPanel');
+    const libraryPanel = document.getElementById('libraryPanel');
+    const searchPanel = document.getElementById('searchPanel');
+    const integrationPanel = document.getElementById('integrationPanel');
+    const castPanel = document.getElementById('castPanel');
+    const spotifyPanel = document.getElementById('spotifyPanel');
+    const youtubePanel = document.getElementById('youtubePanel');
+    const youtubeWatchPanel = document.getElementById('youtubeWatchPanel');
+    const youtubeEmbedPanel = document.getElementById('youtubeEmbedPanel');
+    const spotifySaverPanel = document.getElementById('spotifySaverPanel');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const tabVisibilitySettings = document.getElementById('tabVisibilitySettings');
+    const resetTabsButton = document.getElementById('resetTabsButton');
+    const settingsFilter = document.getElementById('settingsFilter');
+    const settingsFilterForm = document.getElementById('settingsFilterForm');
+    const alternateColorsToggle = document.getElementById('alternateColorsToggle');
+    const bubbleBeeToggle = document.getElementById('bubbleBeeToggle');
+    const geckoboyToggle = document.getElementById('geckoboyToggle');
+    const iceBearToggle = document.getElementById('iceBearToggle');
+    const mushroomToggle = document.getElementById('mushroomToggle');
+    const girlyToggle = document.getElementById('girlyToggle');
+    const johnDeerToggle = document.getElementById('johnDeerToggle');
+    const banglesToggle = document.getElementById('banglesToggle');
+    const rgbToggle = document.getElementById('rgbToggle');
+    const terminalToggle = document.getElementById('terminalToggle');
+    const windowsXpToggle = document.getElementById('windowsXpToggle');
+    const retroMacToggle = document.getElementById('retroMacToggle');
+    const gameboyToggle = document.getElementById('gameboyToggle');
+    const snesToggle = document.getElementById('snesToggle');
+    const spaceballsToggle = document.getElementById('spaceballsToggle');
+    const ps2Toggle = document.getElementById('ps2Toggle');
+    const xboxToggle = document.getElementById('xboxToggle');
+    const atariToggle = document.getElementById('atariToggle');
+    const c64Toggle = document.getElementById('c64Toggle');
+    const genesisToggle = document.getElementById('genesisToggle');
+    const ubuntuToggle = document.getElementById('ubuntuToggle');
+    const batmanToggle = document.getElementById('batmanToggle');
+    const robinToggle = document.getElementById('robinToggle');
+    const jokerToggle = document.getElementById('jokerToggle');
+    const starwarsToggle = document.getElementById('starwarsToggle');
+    const midnightSkysToggle = document.getElementById('midnightSkysToggle');
+    const finishSettings = document.getElementById('finishSettings');
+    const fontSizeSelect = document.getElementById('fontSizeSelect');
+    const fontFamilySelect = document.getElementById('fontFamilySelect');
+    const artworkToggle = document.getElementById('artworkToggle');
+    const castButton = document.getElementById('castButton');
+    const castMessage = document.getElementById('castMessage');
+    const youtubeInput = document.getElementById('youtubeInput');
+    const youtubeEmbed = document.getElementById('youtubeEmbed');
+    const youtubeMessage = document.getElementById('youtubeMessage');
+    const youtubeWatchForm = document.getElementById('youtubeWatchForm');
+    const youtubeWatchInput = document.getElementById('youtubeWatchInput');
+    const youtubeWatchEmbed = document.getElementById('youtubeWatchEmbed');
+    const youtubeWatchMessage = document.getElementById('youtubeWatchMessage');
+    const clearYoutubeWatch = document.getElementById('clearYoutubeWatch');
+    const youtubeSearchForm = document.getElementById('youtubeSearchForm');
+    const youtubeSearchInput = document.getElementById('youtubeSearchInput');
+    const youtubeSearchMessage = document.getElementById('youtubeSearchMessage');
+    const clearYoutubeSearch = document.getElementById('clearYoutubeSearch');
+    const spotifyInput = document.getElementById('spotifyInput');
+    const spotifyEmbed = document.getElementById('spotifyEmbed');
+    const spotifyMessage = document.getElementById('spotifyMessage');
+    const spotifyPlaylistTitle = document.getElementById('spotifyPlaylistTitle');
+    const spotifyPlaylistDescription = document.getElementById('spotifyPlaylistDescription');
+    const spotifySearchForm = document.getElementById('spotifySearchForm');
+    const spotifySearchInput = document.getElementById('spotifySearchInput');
+    const spotifySearchMessage = document.getElementById('spotifySearchMessage');
+    const clearSpotifySearch = document.getElementById('clearSpotifySearch');
+    const forgetSpotify = document.getElementById('forgetSpotify');
+    const forgetYoutube = document.getElementById('forgetYoutube');
+    const searchInput = document.getElementById('searchInput');
+    const artistFilter = document.getElementById('artistFilter');
+    const typeFilter = document.getElementById('typeFilter');
+    const searchGrid = document.getElementById('searchGrid');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const uploadStatusText = document.getElementById('uploadStatusText');
+    const uploadStatusCount = document.getElementById('uploadStatusCount');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const uploadProgressFill = document.getElementById('uploadProgressFill');
+    const libraryFiles = [];
+    const databaseName = 'purple-player-library';
+    const playlistMemoryKey = 'purple-player-playlists';
+    const tabVisibilityKey = 'purple-player-tab-visibility';
+    const alternateColorsKey = 'purple-player-alternate-colors';
+    const bubbleBeeKey = 'purple-player-bubble-bee';
+    const geckoboyKey = 'purple-player-geckoboy-theme';
+    const iceBearKey = 'purple-player-ice-bear-theme';
+    const mushroomKey = 'purple-player-mushroom-theme';
+    const girlyKey = 'purple-player-girly-theme';
+    const johnDeerKey = 'purple-player-john-deer-theme';
+    const banglesKey = 'purple-player-bangles-theme';
+    const rgbKey = 'purple-player-rgb-theme';
+    const terminalKey = 'purple-player-terminal-theme';
+    const windowsXpKey = 'purple-player-windows-xp-theme';
+    const retroMacKey = 'purple-player-retro-mac-theme';
+    const gameboyKey = 'purple-player-gameboy-theme';
+    const snesKey = 'purple-player-snes-theme';
+    const spaceballsKey = 'purple-player-spaceballs-theme';
+    const ps2Key = 'purple-player-ps2-theme';
+    const xboxKey = 'purple-player-xbox-theme';
+    const atariKey = 'purple-player-atari-theme';
+    const c64Key = 'purple-player-c64-theme';
+    const genesisKey = 'purple-player-genesis-theme';
+    const ubuntuKey = 'purple-player-ubuntu-theme';
+    const batmanKey = 'purple-player-batman-theme';
+    const robinKey = 'purple-player-robin-theme';
+    const jokerKey = 'purple-player-joker-theme';
+    const starwarsKey = 'purple-player-starwars-theme';
+    const midnightSkysKey = 'purple-player-midnight-skys-theme';
+    const fontSizeKey = 'purple-player-font-size';
+    const fontFamilyKey = 'purple-player-font-family';
+    const artworkKey = 'purple-player-artwork';
+    const reopenSettingsKey = 'purple-player-reopen-settings';
+    const integrationTabs = ['spotify', 'youtube', 'youtubeWatch', 'youtubeEmbed', 'spotifySaver'];
+    const configurableTabs = [
+      { id: 'player', label: 'Player', tab: playerTab },
+      { id: 'library', label: 'Library', tab: libraryTab },
+      { id: 'search', label: 'Search', tab: searchTab },
+      { id: 'integration', label: 'Integration', tab: integrationTab },
+      { id: 'cast', label: 'Cast', tab: castTab }
+    ];
+    let tabVisibility = loadTabVisibility();
+    let alternateColors = loadAlternateColors();
+    let bubbleBee = loadBubbleBee();
+    let geckoboy = loadGeckoboy();
+    let iceBear = loadIceBear();
+    let mushroom = loadMushroom();
+    let girly = loadGirly();
+    let johnDeer = loadJohnDeer();
+    let bangles = loadBangles();
+    let rgb = loadRgb();
+    let terminal = loadTerminal();
+    let windowsXp = loadWindowsXp();
+    let retroMac = loadRetroMac();
+    let gameboy = loadGameboy();
+    let snes = loadSnes();
+    let spaceballs = loadSpaceballs();
+    let ps2 = loadPs2();
+    let xbox = loadXbox();
+    let atari = loadAtari();
+    let c64 = loadC64();
+    let genesis = loadGenesis();
+    let ubuntu = loadUbuntu();
+    let batman = loadBatman();
+    let robin = loadRobin();
+    let joker = loadJoker();
+    let starwars = loadStarwars();
+    let midnightSkys = loadMidnightSkys();
+    if (midnightSkys) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false; ubuntu = false; batman = false; robin = false; joker = false; starwars = false;
+    } else if (starwars) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false; ubuntu = false; batman = false; robin = false; joker = false;
+    } else if (joker) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false; ubuntu = false; batman = false; robin = false;
+    } else if (robin) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false; ubuntu = false; batman = false;
+    } else if (batman) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false; ubuntu = false;
+    } else if (ubuntu) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false; genesis = false;
+    } else if (genesis) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false; c64 = false;
+    } else if (c64) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false; atari = false;
+    } else if (atari) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false; xbox = false;
+    } else if (xbox) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false; ps2 = false;
+    } else if (ps2) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false; spaceballs = false;
+    } else if (spaceballs) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false; snes = false;
+    } else if (snes) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false; gameboy = false;
+    } else if (gameboy) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false; retroMac = false;
+    } else if (retroMac) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false; windowsXp = false;
+    } else if (windowsXp) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false; terminal = false;
+    } else if (terminal) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false; rgb = false;
+    } else if (rgb) {
+      alternateColors = false; bubbleBee = false; geckoboy = false; iceBear = false; mushroom = false; girly = false; johnDeer = false; bangles = false;
+    }
+    let fontSize = loadFontSize();
+    let fontFamily = loadFontFamily();
+    let artworkEnabled = loadArtworkEnabled();
+    if (bangles) {
+      alternateColors = false;
+      bubbleBee = false;
+      geckoboy = false;
+      iceBear = false;
+      mushroom = false;
+      girly = false;
+      johnDeer = false;
+    } else if (johnDeer) {
+      alternateColors = false;
+      bubbleBee = false;
+      geckoboy = false;
+      iceBear = false;
+      mushroom = false;
+      girly = false;
+    } else if (girly) {
+      alternateColors = false;
+      bubbleBee = false;
+      geckoboy = false;
+      iceBear = false;
+      mushroom = false;
+    } else if (mushroom) {
+      alternateColors = false;
+      bubbleBee = false;
+      geckoboy = false;
+      iceBear = false;
+    } else if (iceBear) {
+      alternateColors = false;
+      bubbleBee = false;
+      geckoboy = false;
+    } else if (bubbleBee) {
+      alternateColors = false;
+      geckoboy = false;
+    } else if (geckoboy) {
+      alternateColors = false;
+    }
+    let currentTab = 'player';
+    let objectUrl;
+    const formatTime = seconds => {
+      const minutes = Math.floor(seconds / 60) || 0;
+      const secs = Math.floor(seconds % 60) || 0;
+      return `${minutes}:${String(secs).padStart(2, '0')}`;
+    };
+    const updatePlayIcon = () => {
+      play.innerHTML = video.paused
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg>';
+      play.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
+      quickPlay.innerHTML = video.paused
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg>';
+      quickPlay.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
+    };
+    play.addEventListener('click', () => video.paused ? video.play() : video.pause());
+    function toggleFullscreen() {
+      if (document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen();
+    }
+    document.addEventListener('keydown', event => {
+      if (event.repeat || /INPUT|TEXTAREA|SELECT|BUTTON/.test(event.target.tagName)) return;
+      if (event.code === 'KeyF') {
+        event.preventDefault();
+        toggleFullscreen();
+        return;
+      }
+      if (event.code !== 'Space') return;
+      event.preventDefault();
+      video.paused ? video.play() : video.pause();
+    });
+    video.addEventListener('play', updatePlayIcon);
+    video.addEventListener('pause', updatePlayIcon);
+    video.addEventListener('loadedmetadata', () => { duration.textContent = formatTime(video.duration); quickDuration.textContent = formatTime(video.duration); });
+    video.addEventListener('timeupdate', () => { const progress = video.duration ? (video.currentTime / video.duration) * 100 : 0; currentTime.textContent = formatTime(video.currentTime); quickCurrentTime.textContent = formatTime(video.currentTime); seek.value = progress; quickSeek.value = progress; });
+    seek.addEventListener('input', () => { if (video.duration) video.currentTime = (seek.value / 100) * video.duration; });
+    quickSeek.addEventListener('input', () => { if (video.duration) video.currentTime = (quickSeek.value / 100) * video.duration; });
+    document.getElementById('back').addEventListener('click', () => video.currentTime = Math.max(0, video.currentTime - 10));
+    document.getElementById('forward').addEventListener('click', () => video.currentTime = Math.min(video.duration || 0, video.currentTime + 10));
+    volume.addEventListener('input', () => { video.volume = volume.value; video.muted = false; });
+    document.getElementById('mute').addEventListener('click', () => { video.muted = !video.muted; });
+    document.getElementById('fullscreen').addEventListener('click', toggleFullscreen);
+    function showQuickControls() {
+      if (document.fullscreenElement !== player) return;
+      quickControls.hidden = false;
+      clearTimeout(quickControlsTimer);
+      quickControlsTimer = setTimeout(() => { quickControls.hidden = true; }, 3000);
+    }
+    mediaWrap.addEventListener('click', showQuickControls);
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement !== player) {
+        quickControls.hidden = true;
+        clearTimeout(quickControlsTimer);
+      }
+    });
+    quickPlay.addEventListener('click', event => { event.stopPropagation(); video.paused ? video.play() : video.pause(); showQuickControls(); });
+    document.getElementById('quickBack').addEventListener('click', event => { event.stopPropagation(); video.currentTime = Math.max(0, video.currentTime - 10); showQuickControls(); });
+    document.getElementById('quickForward').addEventListener('click', event => { event.stopPropagation(); video.currentTime = Math.min(video.duration || 0, video.currentTime + 10); showQuickControls(); });
+    document.getElementById('quickMute').addEventListener('click', event => { event.stopPropagation(); video.muted = !video.muted; showQuickControls(); });
+    document.getElementById('quickFullscreen').addEventListener('click', event => { event.stopPropagation(); document.exitFullscreen(); });
+    fileUpload.addEventListener('change', () => {
+      const file = fileUpload.files[0];
+      if (!file) return;
+      loadFile(file);
+    });
+    function showTab(tab) {
+      if (tab !== 'settings' && (tabVisibility[tab] === false || (integrationTabs.includes(tab) && tabVisibility.integration === false))) tab = 'settings';
+      currentTab = tab;
+      const isPlayer = tab === 'player';
+      const isLibrary = tab === 'library';
+      const isIntegration = integrationTabs.includes(tab);
+      playerTab.setAttribute('aria-selected', isPlayer);
+      libraryTab.setAttribute('aria-selected', isLibrary);
+      searchTab.setAttribute('aria-selected', tab === 'search');
+      integrationTab.setAttribute('aria-selected', isIntegration);
+      castTab.setAttribute('aria-selected', tab === 'cast');
+      spotifyTab.setAttribute('aria-selected', tab === 'spotify');
+      youtubeTab.setAttribute('aria-selected', tab === 'youtube');
+      youtubeWatchTab.setAttribute('aria-selected', tab === 'youtubeWatch');
+      youtubeEmbedTab.setAttribute('aria-selected', tab === 'youtubeEmbed');
+      spotifySaverTab.setAttribute('aria-selected', tab === 'spotifySaver');
+      settingsTab.setAttribute('aria-selected', tab === 'settings');
+      playerPanel.hidden = !isPlayer;
+      libraryPanel.hidden = !isLibrary;
+      searchPanel.hidden = tab !== 'search';
+      integrationPanel.hidden = !isIntegration;
+      castPanel.hidden = tab !== 'cast';
+      spotifyPanel.hidden = tab !== 'spotify';
+      youtubePanel.hidden = tab !== 'youtube';
+      youtubeWatchPanel.hidden = tab !== 'youtubeWatch';
+      youtubeEmbedPanel.hidden = tab !== 'youtubeEmbed';
+      spotifySaverPanel.hidden = tab !== 'spotifySaver';
+      settingsPanel.hidden = tab !== 'settings';
+      if (tab === 'search') { renderSearch(); searchInput.focus(); }
+    }
+    let tabAudioContext;
+    function getTabAudioContext() {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return null;
+      tabAudioContext ||= new AudioContext();
+      if (tabAudioContext.state === 'suspended') tabAudioContext.resume();
+      return tabAudioContext;
+    }
+    function playTabClickSound() {
+      const audioContext = getTabAudioContext();
+      if (!audioContext) return;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(620, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(420, audioContext.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.045, audioContext.currentTime + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.07);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.07);
+    }
+    function playCheckboxSound(checked) {
+      const audioContext = getTabAudioContext();
+      if (!audioContext) return;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(checked ? 760 : 500, audioContext.currentTime);
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.035, audioContext.currentTime + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.055);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.055);
+    }
+    function playMediaClickSound() {
+      const audioContext = getTabAudioContext();
+      if (!audioContext) return;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(135, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(58, audioContext.currentTime + 0.11);
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.12);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.12);
+    }
+    function playTextInputSound() {
+      const audioContext = getTabAudioContext();
+      if (!audioContext) return;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(2100, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.025);
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.012, audioContext.currentTime + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.03);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.03);
+    }
+    function playBootupSound() {
+      try {
+        const audioContext = getTabAudioContext();
+        if (!audioContext) return;
+        const start = audioContext.currentTime;
+        [330, 494, 659].forEach((frequency, index) => {
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(frequency, start);
+          gain.gain.setValueAtTime(0.0001, start + index * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.04, start + index * 0.08 + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + index * 0.08 + 0.16);
+          oscillator.connect(gain).connect(audioContext.destination);
+          oscillator.start(start + index * 0.08);
+          oscillator.stop(start + index * 0.08 + 0.16);
+        });
+      } catch (error) {
+        // Some browsers block audio contexts until the first user gesture.
+      }
+    }
+    document.querySelectorAll('input[type="text"], input[type="search"], input[type="url"], input[type="email"], textarea').forEach(input => {
+      input.addEventListener('input', playTextInputSound);
+    });
+    function bindTab(tabButton, tabName) {
+      tabButton.addEventListener('click', () => {
+        if (currentTab !== tabName) playTabClickSound();
+        showTab(tabName);
+      });
+    }
+    bindTab(playerTab, 'player');
+    bindTab(libraryTab, 'library');
+    bindTab(searchTab, 'search');
+    bindTab(integrationTab, 'spotify');
+    bindTab(castTab, 'cast');
+    bindTab(spotifyTab, 'spotify');
+    bindTab(youtubeTab, 'youtube');
+    bindTab(youtubeWatchTab, 'youtubeWatch');
+    bindTab(youtubeEmbedTab, 'youtubeEmbed');
+    bindTab(spotifySaverTab, 'spotifySaver');
+    bindTab(settingsTab, 'settings');
+    document.querySelectorAll('[data-close-tab]').forEach(closeButton => {
+      const closeTab = event => {
+        event.stopPropagation();
+        const tabId = closeButton.dataset.closeTab;
+        const wasActive = currentTab === tabId || (tabId === 'integration' && integrationTabs.includes(currentTab));
+        closeButton.classList.add('is-closing');
+        tabVisibility[tabId] = false;
+        localStorage.setItem(tabVisibilityKey, JSON.stringify(tabVisibility));
+        const visibilityToggle = tabVisibilitySettings.querySelector(`[data-tab-id="${tabId}"]`);
+        if (visibilityToggle) visibilityToggle.checked = false;
+        closeButton.hidden = true;
+        closeButton.parentElement.hidden = true;
+        applyTabVisibility();
+        if (wasActive) {
+          const closedIndex = mainTabEntries.findIndex(({ button }) => button === closeButton.parentElement);
+          const availableTabs = mainTabEntries.map((entry, index) => ({ ...entry, index })).filter(({ button }) => !button.hidden);
+          const nextTab = availableTabs.find(({ index }) => index > closedIndex) || availableTabs[availableTabs.length - 1];
+          if (nextTab) {
+            showTab(nextTab.tab);
+            nextTab.button.focus();
+          }
+        }
+      };
+      closeButton.addEventListener('click', closeTab);
+      closeButton.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        closeTab(event);
+      });
+    });
+    resetTabsButton.addEventListener('click', () => {
+      configurableTabs.forEach(({ id }) => { tabVisibility[id] = true; });
+      tabVisibilitySettings.querySelectorAll('input[data-tab-id]').forEach(toggle => { toggle.checked = true; });
+      localStorage.setItem(tabVisibilityKey, JSON.stringify(tabVisibility));
+      applyTabVisibility();
+    });
+    castButton.addEventListener('click', async () => {
+      if (!('remote' in video) || !video.remote) {
+        castMessage.textContent = 'Casting is not supported by this browser.';
+        return;
+      }
+      try {
+        await video.remote.prompt();
+        castMessage.textContent = 'Casting device selected.';
+      } catch (error) {
+        castMessage.textContent = error.name === 'AbortError' ? 'Casting selection cancelled.' : 'Could not connect to a casting device.';
+      }
+    });
+    if ('remote' in video && video.remote) {
+      video.remote.addEventListener('connecting', () => { castMessage.textContent = 'Connecting to casting device...'; });
+      video.remote.addEventListener('connect', () => { castMessage.textContent = 'Casting connected.'; });
+      video.remote.addEventListener('disconnect', () => { castMessage.textContent = 'Casting disconnected.'; });
+    }
+    const mainTabEntries = [
+      { button: playerTab, tab: 'player' },
+      { button: libraryTab, tab: 'library' },
+      { button: searchTab, tab: 'search' },
+      { button: integrationTab, tab: 'spotify' },
+      { button: castTab, tab: 'cast' },
+      { button: settingsTab, tab: 'settings' }
+    ];
+    const integrationTabEntries = [
+      { button: spotifyTab, tab: 'spotify' },
+      { button: youtubeTab, tab: 'youtube' },
+      { button: youtubeWatchTab, tab: 'youtubeWatch' },
+      { button: youtubeEmbedTab, tab: 'youtubeEmbed' },
+      { button: spotifySaverTab, tab: 'spotifySaver' }
+    ];
+    function moveTabFocus(entries, currentButton, direction, skipHidden = false) {
+      const available = skipHidden ? entries.filter(({ button }) => !button.hidden) : entries;
+      const currentIndex = available.findIndex(({ button }) => button === currentButton);
+      if (currentIndex < 0 || !available.length) return;
+      const nextIndex = (currentIndex + direction + available.length) % available.length;
+      const next = available[nextIndex];
+      showTab(next.tab);
+      next.button.focus();
+    }
+    mainTabEntries.forEach(({ button }) => button.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      moveTabFocus(mainTabEntries, button, event.key === 'ArrowRight' ? 1 : -1, true);
+    }));
+    integrationTabEntries.forEach(({ button }) => button.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      event.preventDefault();
+      moveTabFocus(integrationTabEntries, button, event.key === 'ArrowDown' ? 1 : -1);
+    }));
+    settingsFilterForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const query = settingsFilter.value.trim().toLowerCase();
+      const groups = [...document.querySelectorAll('[data-settings-category]')];
+      const matchingGroups = groups.filter(group => query === '' || group.dataset.settingsCategory.includes(query));
+      groups.forEach(group => {
+        group.hidden = query !== '' && !group.dataset.settingsCategory.includes(query);
+      });
+      if (matchingGroups.length === 1) {
+        history.replaceState(null, '', `#${matchingGroups[0].id}`);
+        matchingGroups[0].scrollIntoView({ block: 'start' });
+      } else if (!query) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    });
+    fontSizeSelect.value = String(fontSize);
+    fontFamilySelect.value = fontFamily;
+    applyFontSize();
+    fontSizeSelect.addEventListener('change', event => {
+      fontSize = Number(event.target.value);
+    });
+    fontFamilySelect.addEventListener('change', event => {
+      fontFamily = event.target.value;
+    });
+    artworkToggle.checked = artworkEnabled;
+    artworkToggle.addEventListener('change', event => {
+      artworkEnabled = event.target.checked;
+    });
+    alternateColorsToggle.checked = alternateColors;
+    bubbleBeeToggle.checked = bubbleBee;
+    geckoboyToggle.checked = geckoboy;
+    iceBearToggle.checked = iceBear;
+    mushroomToggle.checked = mushroom;
+    girlyToggle.checked = girly;
+    johnDeerToggle.checked = johnDeer;
+    banglesToggle.checked = bangles;
+    rgbToggle.checked = rgb;
+    terminalToggle.checked = terminal;
+    windowsXpToggle.checked = windowsXp;
+    retroMacToggle.checked = retroMac;
+    gameboyToggle.checked = gameboy;
+    snesToggle.checked = snes;
+    spaceballsToggle.checked = spaceballs;
+    ps2Toggle.checked = ps2;
+    xboxToggle.checked = xbox;
+    atariToggle.checked = atari;
+    c64Toggle.checked = c64;
+    genesisToggle.checked = genesis;
+    ubuntuToggle.checked = ubuntu;
+    batmanToggle.checked = batman;
+    robinToggle.checked = robin;
+    jokerToggle.checked = joker;
+    starwarsToggle.checked = starwars;
+    midnightSkysToggle.checked = midnightSkys;
+    applyAlternateColors();
+    const themeControls = {
+      alternate: { toggle: alternateColorsToggle, set: value => { alternateColors = value; } },
+      bubbleBee: { toggle: bubbleBeeToggle, set: value => { bubbleBee = value; } },
+      geckoboy: { toggle: geckoboyToggle, set: value => { geckoboy = value; } },
+      iceBear: { toggle: iceBearToggle, set: value => { iceBear = value; } },
+      mushroom: { toggle: mushroomToggle, set: value => { mushroom = value; } },
+      girly: { toggle: girlyToggle, set: value => { girly = value; } },
+      johnDeer: { toggle: johnDeerToggle, set: value => { johnDeer = value; } },
+      bangles: { toggle: banglesToggle, set: value => { bangles = value; } }
+      ,rgb: { toggle: rgbToggle, set: value => { rgb = value; } },
+      terminal: { toggle: terminalToggle, set: value => { terminal = value; } }
+      ,windowsXp: { toggle: windowsXpToggle, set: value => { windowsXp = value; } }
+      ,retroMac: { toggle: retroMacToggle, set: value => { retroMac = value; } }
+      ,gameboy: { toggle: gameboyToggle, set: value => { gameboy = value; } }
+      ,snes: { toggle: snesToggle, set: value => { snes = value; } }
+      ,spaceballs: { toggle: spaceballsToggle, set: value => { spaceballs = value; } }
+      ,ps2: { toggle: ps2Toggle, set: value => { ps2 = value; } }
+      ,xbox: { toggle: xboxToggle, set: value => { xbox = value; } }
+      ,atari: { toggle: atariToggle, set: value => { atari = value; } }
+      ,c64: { toggle: c64Toggle, set: value => { c64 = value; } }
+      ,genesis: { toggle: genesisToggle, set: value => { genesis = value; } }
+      ,ubuntu: { toggle: ubuntuToggle, set: value => { ubuntu = value; } }
+      ,batman: { toggle: batmanToggle, set: value => { batman = value; } }
+      ,robin: { toggle: robinToggle, set: value => { robin = value; } }
+      ,joker: { toggle: jokerToggle, set: value => { joker = value; } }
+      ,starwars: { toggle: starwarsToggle, set: value => { starwars = value; } }
+      ,midnightSkys: { toggle: midnightSkysToggle, set: value => { midnightSkys = value; } }
+    };
+    function selectTheme(theme, enabled) {
+      Object.entries(themeControls).forEach(([id, control]) => {
+        const selected = enabled && id === theme;
+        control.set(selected);
+        control.toggle.checked = selected;
+      });
+    }
+    Object.entries(themeControls).forEach(([id, control]) => {
+      control.toggle.addEventListener('change', event => {
+        playCheckboxSound(event.target.checked);
+        selectTheme(id, event.target.checked);
+      });
+    });
+    finishSettings.addEventListener('click', () => {
+      localStorage.setItem(tabVisibilityKey, JSON.stringify(tabVisibility));
+      localStorage.setItem(alternateColorsKey, JSON.stringify(alternateColors));
+      localStorage.setItem(bubbleBeeKey, JSON.stringify(bubbleBee));
+      localStorage.setItem(geckoboyKey, JSON.stringify(geckoboy));
+      localStorage.setItem(iceBearKey, JSON.stringify(iceBear));
+      localStorage.setItem(mushroomKey, JSON.stringify(mushroom));
+      localStorage.setItem(girlyKey, JSON.stringify(girly));
+      localStorage.setItem(johnDeerKey, JSON.stringify(johnDeer));
+      localStorage.setItem(banglesKey, JSON.stringify(bangles));
+      localStorage.setItem(rgbKey, JSON.stringify(rgb));
+      localStorage.setItem(terminalKey, JSON.stringify(terminal));
+      localStorage.setItem(windowsXpKey, JSON.stringify(windowsXp));
+      localStorage.setItem(retroMacKey, JSON.stringify(retroMac));
+      localStorage.setItem(gameboyKey, JSON.stringify(gameboy));
+      localStorage.setItem(snesKey, JSON.stringify(snes));
+      localStorage.setItem(spaceballsKey, JSON.stringify(spaceballs));
+      localStorage.setItem(ps2Key, JSON.stringify(ps2));
+      localStorage.setItem(xboxKey, JSON.stringify(xbox));
+      localStorage.setItem(atariKey, JSON.stringify(atari));
+      localStorage.setItem(c64Key, JSON.stringify(c64));
+      localStorage.setItem(genesisKey, JSON.stringify(genesis));
+      localStorage.setItem(ubuntuKey, JSON.stringify(ubuntu));
+      localStorage.setItem(batmanKey, JSON.stringify(batman));
+      localStorage.setItem(robinKey, JSON.stringify(robin));
+      localStorage.setItem(jokerKey, JSON.stringify(joker));
+      localStorage.setItem(starwarsKey, JSON.stringify(starwars));
+      localStorage.setItem(midnightSkysKey, JSON.stringify(midnightSkys));
+      localStorage.setItem(fontSizeKey, String(fontSize));
+      localStorage.setItem(fontFamilyKey, fontFamily);
+      localStorage.setItem(artworkKey, JSON.stringify(artworkEnabled));
+      sessionStorage.setItem(reopenSettingsKey, 'true');
+      window.location.reload();
+    });
+    function loadAlternateColors() {
+      return localStorage.getItem(alternateColorsKey) === 'true';
+    }
+    function loadBubbleBee() {
+      return localStorage.getItem(bubbleBeeKey) === 'true';
+    }
+    function loadGeckoboy() {
+      return localStorage.getItem(geckoboyKey) === 'true';
+    }
+    function loadIceBear() {
+      return localStorage.getItem(iceBearKey) === 'true';
+    }
+    function loadMushroom() {
+      return localStorage.getItem(mushroomKey) === 'true';
+    }
+    function loadGirly() {
+      return localStorage.getItem(girlyKey) === 'true';
+    }
+    function loadJohnDeer() {
+      return localStorage.getItem(johnDeerKey) === 'true';
+    }
+    function loadBangles() {
+      return localStorage.getItem(banglesKey) === 'true';
+    }
+    function loadRgb() {
+      return localStorage.getItem(rgbKey) === 'true';
+    }
+    function loadTerminal() {
+      return localStorage.getItem(terminalKey) === 'true';
+    }
+    function loadWindowsXp() {
+      return localStorage.getItem(windowsXpKey) === 'true';
+    }
+    function loadRetroMac() {
+      return localStorage.getItem(retroMacKey) === 'true';
+    }
+    function loadGameboy() {
+      return localStorage.getItem(gameboyKey) === 'true';
+    }
+    function loadSnes() {
+      return localStorage.getItem(snesKey) === 'true';
+    }
+    function loadSpaceballs() {
+      return localStorage.getItem(spaceballsKey) === 'true';
+    }
+    function loadPs2() {
+      return localStorage.getItem(ps2Key) === 'true';
+    }
+    function loadXbox() {
+      return localStorage.getItem(xboxKey) === 'true';
+    }
+    function loadAtari() {
+      return localStorage.getItem(atariKey) === 'true';
+    }
+    function loadC64() {
+      return localStorage.getItem(c64Key) === 'true';
+    }
+    function loadGenesis() {
+      return localStorage.getItem(genesisKey) === 'true';
+    }
+    function loadUbuntu() {
+      return localStorage.getItem(ubuntuKey) === 'true';
+    }
+    function loadBatman() {
+      return localStorage.getItem(batmanKey) === 'true';
+    }
+    function loadRobin() {
+      return localStorage.getItem(robinKey) === 'true';
+    }
+    function loadJoker() {
+      return localStorage.getItem(jokerKey) === 'true';
+    }
+    function loadStarwars() {
+      return localStorage.getItem(starwarsKey) === 'true';
+    }
+    function loadMidnightSkys() {
+      return localStorage.getItem(midnightSkysKey) === 'true';
+    }
+    function loadFontSize() {
+      const value = Number(localStorage.getItem(fontSizeKey));
+      return Number.isInteger(value) && value >= 15 && value <= 50 && value % 5 === 0 ? value : 15;
+    }
+    function loadFontFamily() {
+      return localStorage.getItem(fontFamilyKey) || 'Inter, ui-sans-serif, system-ui, sans-serif';
+    }
+    function loadArtworkEnabled() {
+      return localStorage.getItem(artworkKey) !== 'false';
+    }
+    function applyAlternateColors() {
+      document.body.dataset.alternateColors = alternateColors ? 'true' : 'false';
+      document.body.dataset.bubbleBee = bubbleBee ? 'true' : 'false';
+      document.body.dataset.geckoboy = geckoboy ? 'true' : 'false';
+      document.body.dataset.iceBear = iceBear ? 'true' : 'false';
+      document.body.dataset.mushroom = mushroom ? 'true' : 'false';
+      document.body.dataset.girly = girly ? 'true' : 'false';
+      document.body.dataset.johnDeer = johnDeer ? 'true' : 'false';
+      document.body.dataset.bangles = bangles ? 'true' : 'false';
+      document.body.dataset.rgb = rgb ? 'true' : 'false';
+      document.body.dataset.terminal = terminal ? 'true' : 'false';
+      document.body.dataset.windowsXp = windowsXp ? 'true' : 'false';
+      document.body.dataset.retroMac = retroMac ? 'true' : 'false';
+      document.body.dataset.gameboy = gameboy ? 'true' : 'false';
+      document.body.dataset.snes = snes ? 'true' : 'false';
+      document.body.dataset.spaceballs = spaceballs ? 'true' : 'false';
+      document.body.dataset.ps2 = ps2 ? 'true' : 'false';
+      document.body.dataset.xbox = xbox ? 'true' : 'false';
+      document.body.dataset.atari = atari ? 'true' : 'false';
+      document.body.dataset.c64 = c64 ? 'true' : 'false';
+      document.body.dataset.genesis = genesis ? 'true' : 'false';
+      document.body.dataset.ubuntu = ubuntu ? 'true' : 'false';
+      document.body.dataset.batman = batman ? 'true' : 'false';
+      document.body.dataset.robin = robin ? 'true' : 'false';
+      document.body.dataset.joker = joker ? 'true' : 'false';
+      document.body.dataset.starwars = starwars ? 'true' : 'false';
+      document.body.dataset.midnightSkys = midnightSkys ? 'true' : 'false';
+    }
+    function applyFontSize() {
+      document.documentElement.style.setProperty('--player-font-size', `${fontSize}px`);
+      document.documentElement.style.setProperty('--player-font-family', fontFamily);
+    }
+    function loadTabVisibility() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(tabVisibilityKey) || '{}');
+        return Object.fromEntries(configurableTabs.map(({ id }) => [id, saved[id] !== false]));
+      } catch (error) {
+        return Object.fromEntries(configurableTabs.map(({ id }) => [id, true]));
+      }
+    }
+    function applyTabVisibility() {
+      configurableTabs.forEach(({ id, tab }) => {
+        tab.hidden = !tabVisibility[id];
+        const closeButton = document.querySelector(`[data-close-tab="${id}"]`);
+        if (closeButton) {
+          closeButton.hidden = !tabVisibility[id];
+          closeButton.parentElement.hidden = !tabVisibility[id];
+        }
+      });
+    }
+    function renderTabVisibilitySettings() {
+      tabVisibilitySettings.innerHTML = '';
+      configurableTabs.forEach(({ id, label }) => {
+        const option = document.createElement('label');
+        option.className = 'settings-option';
+        option.innerHTML = `<input type="checkbox" data-tab-id="${id}"><span>${label}</span>`;
+        option.querySelector('input').checked = tabVisibility[id];
+        option.querySelector('input').addEventListener('change', event => {
+          playCheckboxSound(event.target.checked);
+          tabVisibility[id] = event.target.checked;
+        });
+        tabVisibilitySettings.appendChild(option);
+      });
+    }
+    applyTabVisibility();
+    renderTabVisibilitySettings();
+    const reopenSettings = sessionStorage.getItem(reopenSettingsKey) === 'true';
+    sessionStorage.removeItem(reopenSettingsKey);
+    showTab(reopenSettings || !tabVisibility.player ? 'settings' : 'player');
+    playBootupSound();
+    youtubeSearchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const query = youtubeSearchInput.value.trim();
+      if (!query) {
+        youtubeSearchMessage.textContent = 'Enter a search term first.';
+        youtubeSearchInput.focus();
+        return;
+      }
+      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank', 'noopener');
+      youtubeSearchMessage.textContent = 'YouTube search opened in a new tab.';
+    });
+    clearYoutubeSearch.addEventListener('click', () => {
+      youtubeSearchInput.value = '';
+      youtubeSearchMessage.textContent = '';
+      youtubeSearchInput.focus();
+    });
+    function getYoutubeVideoId(value) {
+      const text = value.trim();
+      if (/^[A-Za-z0-9_-]{11}$/.test(text)) return text;
+      try {
+        const url = new URL(text);
+        if (url.hostname === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] || '';
+        if (url.hostname === 'youtube.com' || url.hostname.endsWith('.youtube.com')) {
+          return url.searchParams.get('v') || url.pathname.match(/\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})/)?.[1] || '';
+        }
+      } catch (error) { return ''; }
+      return '';
+    }
+    youtubeWatchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const videoId = getYoutubeVideoId(youtubeWatchInput.value);
+      if (!videoId) {
+        youtubeWatchMessage.textContent = 'Enter a valid YouTube video link or 11-character video ID.';
+        youtubeWatchEmbed.hidden = true;
+        youtubeWatchInput.focus();
+        return;
+      }
+      youtubeWatchEmbed.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
+      youtubeWatchEmbed.hidden = false;
+      youtubeWatchMessage.textContent = 'Video loaded.';
+    });
+    clearYoutubeWatch.addEventListener('click', () => {
+      youtubeWatchInput.value = '';
+      youtubeWatchEmbed.src = '';
+      youtubeWatchEmbed.hidden = true;
+      youtubeWatchMessage.textContent = '';
+      youtubeWatchInput.focus();
+    });
+    spotifySearchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const query = spotifySearchInput.value.trim();
+      if (!query) {
+        spotifySearchMessage.textContent = 'Enter a song, artist, or album first.';
+        spotifySearchInput.focus();
+        return;
+      }
+      window.open(`https://open.spotify.com/search/${encodeURIComponent(query)}`, '_blank', 'noopener');
+      spotifySearchMessage.textContent = 'Spotify search opened in a new tab.';
+    });
+    clearSpotifySearch.addEventListener('click', () => {
+      spotifySearchInput.value = '';
+      spotifySearchMessage.textContent = '';
+      spotifySearchInput.focus();
+    });
+    function getPlaylistId(value, service) {
+      const text = value.trim();
+      try {
+        const url = new URL(text);
+        if (service === 'spotify' && url.hostname.endsWith('spotify.com')) return url.pathname.match(/\/playlist\/([A-Za-z0-9]+)/)?.[1] || '';
+        if (service === 'youtube' && (url.hostname === 'youtube.com' || url.hostname.endsWith('.youtube.com'))) return url.searchParams.get('list') || '';
+      } catch (error) { return ''; }
+      return '';
+    }
+    function applyYoutubePlaylist(url, message = 'Playlist imported.') {
+      const playlistId = getPlaylistId(url, 'youtube');
+      if (!playlistId) return false;
+      youtubeInput.value = url;
+      youtubeEmbed.src = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(playlistId)}`;
+      youtubeEmbed.hidden = false;
+      youtubeMessage.textContent = message;
+      return true;
+    }
+    function applySpotifyPlaylist(url, message = 'Playlist imported.') {
+      const playlistId = getPlaylistId(url, 'spotify');
+      if (!playlistId) return false;
+      spotifyInput.value = url;
+      spotifyEmbed.src = `https://open.spotify.com/embed/playlist/${encodeURIComponent(playlistId)}`;
+      spotifyPlaylistTitle.textContent = 'Imported playlist';
+      spotifyPlaylistDescription.textContent = 'Playing the playlist selected from Spotify';
+      spotifyMessage.textContent = message;
+      return true;
+    }
+    document.getElementById('loadYoutube').addEventListener('click', () => {
+      if (!applyYoutubePlaylist(youtubeInput.value)) {
+        youtubeMessage.textContent = 'Enter a valid YouTube playlist link containing a list ID.';
+        youtubeEmbed.hidden = true;
+        return;
+      }
+      savePlaylist('youtube', youtubeInput.value).catch(() => { youtubeMessage.textContent = 'Playlist imported for this session, but could not be saved.'; });
+    });
+    document.getElementById('loadSpotify').addEventListener('click', () => {
+      if (!applySpotifyPlaylist(spotifyInput.value)) {
+        spotifyMessage.textContent = 'Enter a valid Spotify playlist link.';
+        return;
+      }
+      savePlaylist('spotify', spotifyInput.value).catch(() => { spotifyMessage.textContent = 'Playlist imported for this session, but could not be saved.'; });
+    });
+    forgetSpotify.addEventListener('click', async () => {
+      await deleteSavedPlaylist('spotify');
+      spotifyInput.value = '';
+      spotifyMessage.textContent = 'Saved Spotify playlist forgotten.';
+    });
+    forgetYoutube.addEventListener('click', async () => {
+      await deleteSavedPlaylist('youtube');
+      youtubeInput.value = '';
+      youtubeEmbed.hidden = true;
+      youtubeMessage.textContent = 'Saved YouTube playlist forgotten.';
+    });
+    function loadFile(file, coverUrl = null) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(file);
+      video.src = objectUrl;
+      video.load();
+      video.play();
+      nowPlayingWidgetTitle.textContent = file.name;
+      const isAudio = file.type.startsWith('audio/');
+      nowPlayingArt.hidden = !isAudio;
+      if (!isAudio) return;
+      nowPlayingTitle.textContent = file.name;
+      nowPlayingCover.hidden = true;
+      nowPlayingFallback.hidden = false;
+      const sourceUrl = objectUrl;
+      const showCover = url => {
+        if (sourceUrl !== objectUrl || !url || !artworkEnabled) return;
+        nowPlayingCover.src = url;
+        nowPlayingCover.hidden = false;
+        nowPlayingFallback.hidden = true;
+      };
+      if (coverUrl) showCover(coverUrl);
+      else if (artworkEnabled) extractMp3Cover(file).then(showCover);
+    }
+    function renderLibrary() {
+      if (!libraryFiles.length) {
+        libraryGrid.innerHTML = '<div class="empty-library"><div><strong>No media yet</strong>Add a video or audio file to start your library.</div></div>';
+        return;
+      }
+      libraryGrid.innerHTML = '';
+      libraryFiles.forEach(({ file, url, coverUrl }) => {
+        if (!artworkEnabled) coverUrl = null;
+        const item = document.createElement('article');
+        item.className = 'media-card';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('aria-label', `Play ${file.name}`);
+        item.innerHTML = file.type.startsWith('video/') ? `<video src="${url}" muted preload="metadata"></video><p>${file.name}</p>` : (coverUrl ? `<img class="album-art" src="${coverUrl}" alt="Album artwork for ${file.name}"><p></p>` : '<div class="audio-art"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13M9 18a3 3 0 1 1-2-3 3 3 0 0 1 2 3zm10-2a3 3 0 1 1-2-3 3 3 0 0 1 2 3z"/></svg></div><p></p>');
+        if (!file.type.startsWith('video/')) item.querySelector('p').textContent = file.name;
+        const playItem = () => { playMediaClickSound(); loadFile(file, coverUrl); showTab('player'); };
+        item.addEventListener('click', playItem);
+        item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); playItem(); } });
+        libraryGrid.appendChild(item);
+      });
+    }
+    function renderSearch() {
+      const query = searchInput.value.trim().toLowerCase();
+      const artistQuery = artistFilter.value.trim().toLowerCase();
+      const type = typeFilter.value;
+      const matches = libraryFiles.filter(({ file, artist }) => (type === 'all' || file.type.startsWith(`${type}/`)) && file.name.toLowerCase().includes(query) && (artist || '').toLowerCase().includes(artistQuery));
+      if (!libraryFiles.length) {
+        searchGrid.innerHTML = '<div class="empty-library"><div><strong>Your library is empty</strong>Add music from the Library tab, then search for it here.</div></div>';
+        return;
+      }
+      if (!matches.length) {
+        searchGrid.innerHTML = '<div class="empty-library"><div><strong>No matching songs</strong>Try another title or part of a filename.</div></div>';
+        return;
+      }
+      searchGrid.innerHTML = '';
+      matches.forEach(({ file, coverUrl }) => {
+        if (!artworkEnabled) coverUrl = null;
+        const item = document.createElement('article');
+        item.className = 'media-card';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('aria-label', `Play ${file.name}`);
+        item.innerHTML = coverUrl ? `<img class="album-art" src="${coverUrl}" alt="Album artwork for ${file.name}"><p></p>` : '<div class="audio-art"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13M9 18a3 3 0 1 1-2-3 3 3 0 0 1 2 3zm10-2a3 3 0 1 1-2-3 3 3 0 0 1 2 3z"/></svg></div><p></p>';
+        item.querySelector('p').textContent = file.name;
+        const playItem = () => { playMediaClickSound(); loadFile(file, coverUrl); showTab('player'); };
+        item.addEventListener('click', playItem);
+        item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); playItem(); } });
+        searchGrid.appendChild(item);
+      });
+    }
+    searchInput.addEventListener('input', renderSearch);
+    artistFilter.addEventListener('input', renderSearch);
+    typeFilter.addEventListener('change', renderSearch);
+    async function extractMp3Cover(file) {
+      if (file.type !== 'audio/mpeg' && !file.name.toLowerCase().endsWith('.mp3')) return null;
+      const data = new Uint8Array(await file.arrayBuffer());
+      if (data.length < 10 || String.fromCharCode(...data.slice(0, 3)) !== 'ID3') return null;
+      const version = data[3];
+      const tagSize = ((data[6] & 127) << 21) | ((data[7] & 127) << 14) | ((data[8] & 127) << 7) | (data[9] & 127);
+      let position = 10;
+      const tagEnd = Math.min(data.length, position + tagSize);
+      while (position + (version === 2 ? 6 : 10) <= tagEnd) {
+        const idLength = version === 2 ? 3 : 4;
+        const id = String.fromCharCode(...data.slice(position, position + idLength));
+        let frameSize = version === 2 ? (data[position + 3] << 16) | (data[position + 4] << 8) | data[position + 5] : (version === 4 ? ((data[position + 4] & 127) << 21) | ((data[position + 5] & 127) << 14) | ((data[position + 6] & 127) << 7) | (data[position + 7] & 127) : (data[position + 4] << 24) | (data[position + 5] << 16) | (data[position + 6] << 8) | data[position + 7]);
+        if (!id.trim() || frameSize <= 0 || position + idLength + (version === 2 ? 3 : 6) + frameSize > tagEnd) break;
+        const contentStart = position + (version === 2 ? 6 : 10);
+        if ((version === 2 && id === 'PIC') || (version > 2 && id === 'APIC')) {
+          let offset = contentStart + 1;
+          let mime;
+          if (version === 2) { mime = `image/${String.fromCharCode(...data.slice(offset, offset + 3)).toLowerCase()}`; offset += 3; }
+          else { const mimeEnd = data.indexOf(0, offset); mime = new TextDecoder().decode(data.slice(offset, mimeEnd)); offset = mimeEnd + 1; }
+          offset += 1;
+          const encoding = data[contentStart];
+          if (encoding === 0 || encoding === 3) { while (offset < tagEnd && data[offset] !== 0) offset++; offset++; }
+          else { while (offset + 1 < tagEnd && (data[offset] !== 0 || data[offset + 1] !== 0)) offset += 2; offset += 2; }
+          const imageEnd = contentStart + frameSize;
+          if (offset < imageEnd) return URL.createObjectURL(new Blob([data.slice(offset, imageEnd)], { type: mime || 'image/jpeg' }));
+        }
+        position = contentStart + frameSize;
+      }
+      return null;
+    }
+    async function extractMp3Artist(file) {
+      if (file.type !== 'audio/mpeg' && !file.name.toLowerCase().endsWith('.mp3')) return '';
+      const data = new Uint8Array(await file.arrayBuffer());
+      if (data.length < 10 || String.fromCharCode(...data.slice(0, 3)) !== 'ID3') return '';
+      const version = data[3];
+      const tagSize = ((data[6] & 127) << 21) | ((data[7] & 127) << 14) | ((data[8] & 127) << 7) | (data[9] & 127);
+      let position = 10;
+      const tagEnd = Math.min(data.length, position + tagSize);
+      while (position + (version === 2 ? 6 : 10) <= tagEnd) {
+        const idLength = version === 2 ? 3 : 4;
+        const id = String.fromCharCode(...data.slice(position, position + idLength));
+        const frameSize = version === 2 ? (data[position + 3] << 16) | (data[position + 4] << 8) | data[position + 5] : (version === 4 ? ((data[position + 4] & 127) << 21) | ((data[position + 5] & 127) << 14) | ((data[position + 6] & 127) << 7) | (data[position + 7] & 127) : (data[position + 4] << 24) | (data[position + 5] << 16) | (data[position + 6] << 8) | data[position + 7]);
+        if (!id.trim() || frameSize <= 0 || position + idLength + (version === 2 ? 3 : 6) + frameSize > tagEnd) break;
+        const contentStart = position + (version === 2 ? 6 : 10);
+        if ((version === 2 && id === 'TP1') || (version > 2 && id === 'TPE1')) {
+          const encoding = data[contentStart];
+          const bytes = data.slice(contentStart + 1, contentStart + frameSize);
+          const charset = encoding === 3 ? 'utf-8' : encoding === 0 ? 'iso-8859-1' : 'utf-16';
+          return new TextDecoder(charset).decode(bytes).replace(/\0/g, '').replace(/^\uFEFF/, '').trim();
+        }
+        position = contentStart + frameSize;
+      }
+      return '';
+    }
+    function openLibraryDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(databaseName, 2);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('playlists')) db.createObjectStore('playlists', { keyPath: 'service' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    async function savePlaylist(service, url) {
+      writePlaylistMemory(service, url);
+      const db = await openLibraryDatabase();
+      await new Promise((resolve, reject) => {
+        const request = db.transaction('playlists', 'readwrite').objectStore('playlists').put({ service, url });
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+    }
+    function readPlaylistMemory() {
+      try {
+        return JSON.parse(localStorage.getItem(playlistMemoryKey) || '{}');
+      } catch (error) {
+        return {};
+      }
+    }
+    function writePlaylistMemory(service, url) {
+      try {
+        const saved = readPlaylistMemory();
+        saved[service] = url;
+        localStorage.setItem(playlistMemoryKey, JSON.stringify(saved));
+      } catch (error) {
+        console.warn('Could not save playlist memory.', error);
+      }
+    }
+    function removePlaylistMemory(service) {
+      try {
+        const saved = readPlaylistMemory();
+        delete saved[service];
+        localStorage.setItem(playlistMemoryKey, JSON.stringify(saved));
+      } catch (error) {
+        console.warn('Could not remove playlist memory.', error);
+      }
+    }
+    async function deleteSavedPlaylist(service) {
+      removePlaylistMemory(service);
+      try {
+        const db = await openLibraryDatabase();
+        await new Promise((resolve, reject) => {
+          const request = db.transaction('playlists', 'readwrite').objectStore('playlists').delete(service);
+          request.onsuccess = resolve;
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+      } catch (error) {
+        alert('Could not forget the saved playlist.');
+      }
+    }
+    async function loadSavedPlaylists() {
+      const memory = readPlaylistMemory();
+      if (memory.spotify) applySpotifyPlaylist(memory.spotify, 'Saved Spotify playlist restored.');
+      if (memory.youtube) applyYoutubePlaylist(memory.youtube, 'Saved YouTube playlist restored.');
+      try {
+        const db = await openLibraryDatabase();
+        const saved = await new Promise((resolve, reject) => {
+          const request = db.transaction('playlists', 'readonly').objectStore('playlists').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        saved.forEach(({ service, url }) => {
+          if (memory[service]) return;
+          if (service === 'spotify') applySpotifyPlaylist(url, 'Saved Spotify playlist restored.');
+          if (service === 'youtube') applyYoutubePlaylist(url, 'Saved YouTube playlist restored.');
+          writePlaylistMemory(service, url);
+        });
+      } catch (error) {
+        console.warn('Could not restore saved playlists.', error);
+      }
+    }
+    async function saveLibraryFile(file) {
+      const db = await openLibraryDatabase();
+      const record = { id: `${Date.now()}-${crypto.randomUUID()}`, file };
+      await new Promise((resolve, reject) => {
+        const request = db.transaction('media', 'readwrite').objectStore('media').put(record);
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+      return record;
+    }
+    async function loadSavedLibrary() {
+      try {
+        const db = await openLibraryDatabase();
+        const saved = await new Promise((resolve, reject) => {
+          const request = db.transaction('media', 'readonly').objectStore('media').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        db.close();
+        for (const { id, file } of saved) {
+          const [coverUrl, artist] = await Promise.all([extractMp3Cover(file), extractMp3Artist(file)]);
+          libraryFiles.push({ id, file, url: URL.createObjectURL(file), coverUrl, artist });
+        }
+      } catch (error) {
+        console.warn('Could not restore the local media library.', error);
+      }
+      renderLibrary();
+      renderSearch();
+    }
+    async function clearSavedLibrary() {
+      const db = await openLibraryDatabase();
+      await new Promise((resolve, reject) => {
+        const request = db.transaction('media', 'readwrite').objectStore('media').clear();
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+    }
+    async function addToLibrary(files) {
+      const supportedFiles = files.filter(file => file.type.startsWith('audio/') || file.type.startsWith('video/'));
+      uploadStatus.hidden = false;
+      if (!supportedFiles.length) {
+        uploadStatusText.textContent = 'No supported media files found.';
+        uploadStatusCount.textContent = '';
+        uploadProgress.setAttribute('aria-valuenow', '0');
+        uploadProgressFill.style.width = '0%';
+        return;
+      }
+      let saved = 0;
+      for (let index = 0; index < supportedFiles.length; index++) {
+        const file = supportedFiles[index];
+        const percent = Math.round((index / supportedFiles.length) * 100);
+        uploadStatusText.textContent = `Saving ${file.name}`;
+        uploadStatusCount.textContent = `${index + 1} of ${supportedFiles.length}`;
+        uploadProgress.setAttribute('aria-valuenow', percent);
+        uploadProgressFill.style.width = `${percent}%`;
+        try {
+          const { id } = await saveLibraryFile(file);
+          const [coverUrl, artist] = await Promise.all([extractMp3Cover(file), extractMp3Artist(file)]);
+          libraryFiles.push({ id, file, url: URL.createObjectURL(file), coverUrl, artist });
+          saved++;
+        } catch (error) {
+          alert('This file could not be saved locally. Your browser may be out of storage space.');
+        }
+      }
+      uploadStatusText.textContent = saved === supportedFiles.length ? 'Upload complete' : 'Upload finished with errors';
+      uploadStatusCount.textContent = `${saved} of ${supportedFiles.length} saved`;
+      uploadProgress.setAttribute('aria-valuenow', '100');
+      uploadProgressFill.style.width = '100%';
+      renderLibrary();
+      renderSearch();
+    }
+    libraryUpload.addEventListener('change', async () => {
+      await addToLibrary([...libraryUpload.files]);
+      libraryUpload.value = '';
+    });
+    folderUpload.addEventListener('change', async () => {
+      await addToLibrary([...folderUpload.files]);
+      folderUpload.value = '';
+    });
+    document.getElementById('clearLibrary').addEventListener('click', async () => {
+      if (!libraryFiles.length || !confirm('Clear every saved item from your library?')) return;
+      try {
+        await clearSavedLibrary();
+        libraryFiles.forEach(item => {
+          URL.revokeObjectURL(item.url);
+          if (item.coverUrl) URL.revokeObjectURL(item.coverUrl);
+        });
+        libraryFiles.length = 0;
+        renderLibrary();
+        renderSearch();
+      } catch (error) {
+        alert('Could not clear the saved library.');
+      }
+    });
+    document.getElementById('saveLibrary').addEventListener('click', async () => {
+      if (!libraryFiles.length) return alert('Add media to your library first.');
+      if (!window.showDirectoryPicker) return alert('Saving to a folder requires a Chromium-based browser and a page opened from a secure site.');
+      try {
+        const folder = await window.showDirectoryPicker({ mode: 'readwrite' });
+        for (const { file } of libraryFiles) {
+          const handle = await folder.getFileHandle(file.name, { create: true });
+          const writer = await handle.createWritable();
+          await writer.write(file);
+          await writer.close();
+        }
+        alert(`${libraryFiles.length} file(s) saved.`);
+      } catch (error) {
+        if (error.name !== 'AbortError') alert('Could not save the library to that folder.');
+      }
+    });
+    loadSavedLibrary();
+    loadSavedPlaylists();
+    video.addEventListener('dblclick', () => document.getElementById('fullscreen').click());
+  </script>
+</body>
+</html>
